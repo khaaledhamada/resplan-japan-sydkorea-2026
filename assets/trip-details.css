@@ -1,0 +1,224 @@
+/* Shared visual theme for the original travel details embedded in either trip.
+   Append after the legacy styles; all booking/checklist markup stays intact. */
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  color-scheme: light;
+  --paper: #f6f8fa;
+  --paper-2: #fff;
+  --ink: #18202f;
+  --ink-soft: #637086;
+  --line: #e2e7ed;
+  --card-shadow: none;
+  --blue: #1a73e8;
+  --seoul: #1a73e8;
+  --tokyo: #1a73e8;
+  --hakone: #1a73e8;
+  --kyoto: #1a73e8;
+  --osaka: #1a73e8;
+  --transit: #637086;
+  --seoul-soft: #eef5fe;
+  --tokyo-soft: #eef5fe;
+  --hakone-soft: #eef5fe;
+  --kyoto-soft: #eef5fe;
+  --osaka-soft: #eef5fe;
+  --seoul-text: #1a73e8;
+  --tokyo-text: #1a73e8;
+  --hakone-text: #1a73e8;
+  --kyoto-text: #1a73e8;
+  --osaka-text: #1a73e8;
+  --nav-offset: 5.5rem;
+  font-family: Inter, Arial, system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+html { background: var(--paper); }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Inter, Arial, system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.65;
+  padding-bottom: 48px;
+}
+.wrap { max-width: 1000px; padding: 0 clamp(22px, 4vw, 56px); }
+h1, h2, h3, h4, .serif, table caption, details summary,
+.day-date-big .weekday, .day-date-big .datenum {
+  font-family: Inter, Arial, system-ui, sans-serif;
+  color: var(--ink);
+}
+h1, h2 { letter-spacing: -.7px; }
+h3, h4 { letter-spacing: -.2px; }
+a, .gmap, .tel, :root[data-theme="dark"] a {
+  color: var(--blue);
+  text-decoration-color: currentColor;
+  text-underline-offset: 3px;
+}
+a:hover { color: #145dbf; }
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 3px solid #78abef;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+button, input, select { font: inherit; }
+
+header.masthead {
+  padding: 36px 0 24px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 22px;
+}
+header.masthead .kicker {
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
+}
+header.masthead h1 { font-size: 32px; line-height: 1.2; margin-bottom: 12px; }
+header.masthead .sub { font-size: 14px; line-height: 1.65; }
+header.masthead .route-badges { justify-content: flex-start; gap: 7px; margin-top: 16px; }
+.badge.seoul, .badge.tokyo, .badge.hakone, .badge.kyoto, .badge.osaka,
+.city-chip {
+  background: #eef5fe;
+  color: var(--blue);
+  border: 1px solid #dce7f5;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+}
+
+nav.quicknav {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px #142d5008;
+  padding: 10px;
+  gap: 7px;
+  justify-content: flex-start;
+  margin-bottom: 26px;
+}
+nav.quicknav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 8px 12px;
+}
+nav.quicknav a:hover { background: #eef5fe; border-color: #c5dbf7; }
+
+section.block { margin-bottom: 32px; }
+section.block > h2 {
+  font-size: 22px;
+  line-height: 1.3;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+  margin-bottom: 18px;
+}
+section.block > p.lead { font-size: 14px; color: var(--ink-soft); line-height: 1.65; }
+h3.sub-h { font-size: 16px; margin: 24px 0 12px; }
+.checklist-group, .pack-col, details, .table-scroll, .day-card {
+  background: #fff;
+  border-color: var(--line);
+  border-radius: 11px;
+  box-shadow: none;
+}
+.checklist-group, .pack-col { padding: 18px 20px; margin-bottom: 14px; }
+.checklist-group h3, .pack-col h3 { font-size: 15px; line-height: 1.5; margin-bottom: 10px; }
+.checklist-group h3 .tag,
+.checklist-group.grp-a h3 .tag, .checklist-group.grp-b h3 .tag,
+.checklist-group.grp-c h3 .tag, .checklist-group.grp-d h3 .tag,
+.checklist-group.grp-e h3 .tag {
+  background: #eef5fe;
+  color: var(--blue);
+  border: 1px solid #dce7f5;
+  border-radius: 6px;
+  font-size: 10px;
+  padding: 2px 7px;
+}
+ul.chk li { border-bottom: 1px solid var(--line); padding: 12px 0; gap: 12px; }
+ul.chk label { min-width: 0; font-size: 14px; line-height: 1.65; cursor: pointer; }
+ul.chk input[type="checkbox"] { width: 20px; height: 20px; min-width: 20px; margin-top: 2px; accent-color: var(--blue); cursor: pointer; }
+.link-row { font-size: 12px; opacity: 1; }
+.verify { background: #eef5fe; color: #145dbf; border-color: #c5dbf7; font-size: 10px; line-height: 1.6; }
+
+table { background: #fff; font-size: 13px; }
+table caption { padding: 15px 16px 10px; font-size: 14px; }
+th, td { padding: 13px 16px; line-height: 1.6; }
+thead th { background: #f6f8fa; color: var(--ink-soft); font-size: 11px; letter-spacing: .5px; }
+tr.row-transit td:first-child, tr.row-seoul td:first-child, tr.row-tokyo td:first-child,
+tr.row-hakone td:first-child, tr.row-kyoto td:first-child, tr.row-osaka td:first-child {
+  border-left-width: 3px;
+}
+
+details { padding: 0 18px; margin-bottom: 12px; }
+details summary { font-size: 14px; line-height: 1.5; padding: 16px 0; min-height: 52px; }
+details p, details ul { font-size: 14px; line-height: 1.65; }
+details[open] summary { margin-bottom: 12px; }
+details li { margin-bottom: 8px; }
+.pack-grid { gap: 14px; }
+.pack-grid .pack-col { margin-bottom: 0; }
+.planb, .warn, .storage-warn {
+  background: #f0f6ff;
+  border: 1px solid #dce7f5;
+  border-left: 3px solid var(--blue);
+  color: #354e6c;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.65;
+  padding: 13px 15px;
+}
+.storage-warn { border-left-color: #c4443f; }
+.maps-link, :root[data-theme="dark"] .maps-link {
+  min-height: 44px;
+  padding: 11px 18px;
+  border-radius: 24px;
+  background: var(--blue);
+  color: #fff !important;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.maps-link:hover { background: #145dbf; }
+
+@media (max-width: 640px) {
+  body { font-size: 14px; padding-bottom: 30px; }
+  .wrap { padding: 0 17px; }
+  header.masthead { padding-top: 23px; padding-bottom: 20px; margin-bottom: 17px; }
+  header.masthead h1 { font-size: 27px; letter-spacing: -.7px; }
+  header.masthead .sub { font-size: 12px; }
+  header.masthead .kicker { font-size: 10px; }
+  .badge.seoul, .badge.tokyo, .badge.hakone, .badge.kyoto, .badge.osaka { font-size: 11px; padding: 4px 9px; }
+  nav.quicknav { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; gap: 6px; margin-bottom: 22px; padding: 8px; scrollbar-width: thin; }
+  nav.quicknav a { font-size: 12px; min-height: 42px; padding: 8px 11px; }
+  section.block { scroll-margin-top: 82px; margin-bottom: 27px; }
+  section.block > h2 { font-size: 20px; margin-bottom: 15px; padding-bottom: 12px; }
+  section.block > p.lead { font-size: 13px; }
+  .checklist-group, .pack-col { padding: 15px 13px; }
+  .checklist-group h3, .pack-col h3 { font-size: 14px; }
+  ul.chk li { gap: 10px; padding: 11px 0; }
+  ul.chk label { font-size: 13px; }
+  .table-scroll, .table-scroll table { background: transparent; border: 0; }
+  .table-scroll table caption { padding: 10px 0; }
+  .table-scroll tr { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--blue); padding: 12px 14px; border-radius: 11px; margin-bottom: 12px; }
+  .table-scroll td { font-size: 13px; border-bottom: 1px solid var(--line); padding: 9px 0; }
+  .table-scroll td:first-child { font-family: Inter, Arial, system-ui, sans-serif; font-size: 14px; padding-bottom: 9px; }
+  .table-scroll td::before { font-size: 10px; font-weight: 700; letter-spacing: .5px; color: var(--ink-soft); }
+  .table-scroll tr.row-transit td:first-child, .table-scroll tr.row-seoul td:first-child,
+  .table-scroll tr.row-tokyo td:first-child, .table-scroll tr.row-hakone td:first-child,
+  .table-scroll tr.row-kyoto td:first-child, .table-scroll tr.row-osaka td:first-child { border-left: 0; }
+  details { padding: 0 13px; }
+  details summary { font-size: 13px; }
+  details p, details ul { font-size: 13px; }
+}
+
+@media print {
+  body { background: #fff; color: #000; }
+  .wrap { max-width: 100%; padding: 0; }
+  nav.quicknav { display: none; }
+  a, .gmap, .tel, :root[data-theme="dark"] a { color: #000; }
+}

@@ -1,19 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { numberPlaces, groupMapPlaces, filterPlaces, initialSelection, navigationUrl, validateData, safeLink } from '../assets/trip-model.mjs';
+import { numberPlaces, groupMapPlaces, filterPlaces, initialSelection, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink } from '../assets/trip-model.mjs';
 import { encryptText, decryptText } from '../scripts/crypto.mjs';
 import { randomBytes } from 'node:crypto';
 const place = (id, extra = {}) => ({ id, city: 'tokyo', name: 'Plats ' + id, category: 'activity', date: '2026-10-08', sequence: 1, lat: 35.6, lon: 139.7, description_sv: 'Promenad', address: 'Tokyo, Japan', status: 'Planerat', ...extra });
 const base = { schema: 1, updatedAt: '2026-09-14T00:00:00Z', cities: [{ id: 'tokyo', name: 'Tokyo', notes: { '2026-10-12': 'Avresa' } }], places: [] };
-test('numbering is stable under filtering and separate per category and city', () => {
-  const numbered = numberPlaces([place('b', { sequence: 2 }), place('a'), place('lunch', { category: 'food' }), place('extra', { status: 'Valfritt' }), place('cake', { category: 'sweet' }), place('seoul', { city: 'seoul' })]);
-  assert.equal(numbered.find(p => p.id === 'a').label, '1');
-  assert.equal(numbered.find(p => p.id === 'b').label, '2');
-  assert.equal(numbered.find(p => p.id === 'extra').label, 'V1');
-  assert.equal(numbered.find(p => p.id === 'lunch').label, 'M1');
-  assert.equal(numbered.find(p => p.id === 'cake').label, 'S1');
-  assert.equal(numbered.find(p => p.id === 'seoul').label, '1');
-  assert.equal(filterPlaces(numbered, { city: 'tokyo', day: '', categories: ['activity'], optional: true, query: 'Plats b' })[0].label, '2');
+test('activity numbering starts with the date and restarts per day, city and optional group', () => {
+  const numbered = numberPlaces([
+    place('b', { sequence: 2 }), place('a'),
+    place('next-day', { date: '2026-10-09' }),
+    place('extra', { status: 'Valfritt' }),
+    place('extra-next-day', { status: 'Valfritt', date: '2026-10-09' }),
+    place('extra-undated', { status: 'Valfritt', date: '' }),
+    place('seoul', { city: 'seoul', date: '2026-10-03' }),
+    place('seoul-same-date', { city: 'seoul' }),
+    place('lunch', { category: 'food' }),
+    place('later-lunch', { category: 'food', date: '2026-10-09' }),
+    place('cake', { category: 'sweet' }),
+  ]);
+  assert.deepEqual(Object.fromEntries(numbered.map(p => [p.id, p.label])), {
+    seoul: '3.1', a: '8.1', 'seoul-same-date': '8.1', extra: '8.V1', lunch: 'M1', cake: 'S1', b: '8.2',
+    'extra-next-day': '9.V1', 'next-day': '9.1', 'later-lunch': 'M2', 'extra-undated': 'V1',
+  });
+  const state = { city: 'tokyo', day: '', categories: ['activity'], optional: true, query: 'Plats b' };
+  assert.equal(filterPlaces(numbered, state)[0].label, '8.2');
+  assert.equal(filterPlaces(numbered, { ...state, query: '8.2' })[0].id, 'b');
+  assert.deepEqual(filterPlaces(numbered, { ...state, day: '2026-10-09', optional: false, query: '' }).map(p => p.label), ['9.1']);
 });
 test('date, optional, category and accent-insensitive search combine', () => {
   const places = numberPlaces([place('a', { name: 'Sötsak', category: 'sweet' }), place('b', { date: '' }), place('c', { status: 'Valfritt' }), place('d', { date: '2026-10-09' })]);
@@ -49,11 +61,24 @@ test('map groups put main activities before earlier optional stops and retain nu
   const originalOrder = places.map(p => p.id);
   const groups = groupMapPlaces([...places].reverse());
   assert.deepEqual(groups.map(g => [g.id, g.title]), [['activity', 'Aktiviteter'], ['optional', 'Valfria aktiviteter'], ['food', 'Mat'], ['sweet', 'Sötsaker']]);
-  assert.deepEqual(groups[0].places.map(p => p.label), Array.from({ length: 12 }, (_, i) => String(i + 1)));
-  assert.deepEqual(groups.slice(1).map(g => g.places.map(p => p.label)), [['V1'], ['M1'], ['S1']]);
+  assert.deepEqual(groups[0].places.map(p => p.label), Array.from({ length: 12 }, (_, i) => '8.' + (i + 1)));
+  assert.deepEqual(groups.slice(1).map(g => g.places.map(p => p.label)), [['7.V1'], ['M1'], ['S1']]);
   assert.deepEqual(groupMapPlaces(places.filter(p => p.category === 'food')).map(g => g.id), ['food']);
   assert.deepEqual(groupMapPlaces([]), []);
   assert.deepEqual(places.map(p => p.id), originalOrder);
+});
+test('map group sorting handles both date and activity numbers numerically', () => {
+  const numbered = numberPlaces([
+    place('october-10', { date: '2026-10-10' }),
+    ...Array.from({ length: 12 }, (_, i) => place('october-3-' + (i + 1), { date: '2026-10-03', sequence: i + 1 })),
+    place('optional-10', { date: '2026-10-10', status: 'Valfritt' }),
+    place('optional-3', { date: '2026-10-03', status: 'Valfritt' }),
+    place('optional-any-day', { date: '', status: 'Valfritt' }),
+  ]);
+  const groups = groupMapPlaces([...numbered].reverse());
+  assert.deepEqual(groups[0].places.map(p => p.label), [...Array.from({ length: 12 }, (_, i) => '3.' + (i + 1)), '10.1']);
+  assert.deepEqual(groups[1].places.map(p => p.label), ['3.V1', '10.V1', 'V1']);
+  assert.equal(numbered.find(p => p.id === 'october-3-2').label, '3.2');
 });
 test('hiding optional activities retains optional food and sweets', () => {
   const places = numberPlaces([place('a', { status: 'Valfritt' }), place('b', { category: 'food', status: 'Valfritt' }), place('c', { category: 'sweet', status: 'Valfritt' })]);
@@ -66,7 +91,15 @@ test('invalid coordinates, duplicate identities and unsafe links are rejected', 
   assert.throws(() => validateData({ ...base, updatedAt: null }));
   assert.throws(() => validateData({ ...base, cities: [...base.cities, ...base.cities] }));
   assert.equal(safeLink('javascript:alert(1)'), null);
-  assert.match(navigationUrl(place('x', { name: 'A & B' })), /A%20%26%20B/);
+});
+test('Google Maps opens the named venue and address without starting directions', () => {
+  const venue = place('x', { name: 'A & B – valfri middag', address: '1-2-3 東京, Japan' });
+  const url = new URL(googleMapsUrl(venue));
+  assert.equal(url.origin, 'https://www.google.com');
+  assert.equal(url.pathname, '/maps/search/');
+  assert.equal(url.searchParams.get('api'), '1');
+  assert.equal(url.searchParams.get('query'), 'A & B, 1-2-3 東京, Japan');
+  assert.deepEqual([...url.searchParams.keys()], ['api', 'query']);
 });
 test('cafes validate, filter, group and number independently from sweets and meals', () => {
   const data = validateData({ ...base, places: [place('coffee', { category: 'cafe', status: 'Valfritt', date: '' }), place('tea', { category: 'cafe', sequence: 2 }), place('cake', { category: 'sweet' }), place('meal', { category: 'food' })] });
@@ -80,6 +113,93 @@ test('cafes validate, filter, group and number independently from sweets and mea
   assert.equal(filtered.length, 2);
   assert.deepEqual(groupMapPlaces(filtered).map(g => [g.id, g.title]), [['cafe', 'Kaféer']]);
   assert.equal(filterPlaces(numbered, { ...initial, categories: ['cafe'], query: 'K2' })[0].id, 'coffee');
+});
+test('food options use local names and count only tagged restaurants in the selected city', () => {
+  const places = [
+    place('tokyo-ramen', { category: 'food', food_tags: ['ramen'] }),
+    place('tokyo-grill', { category: 'food', food_tags: ['bbq', 'meat'] }),
+    place('tokyo-grill-2', { category: 'food', food_tags: ['bbq', 'meat'] }),
+    place('seoul-grill', { city: 'seoul', category: 'food', food_tags: ['bbq', 'meat'] }),
+    place('seoul-noodles', { city: 'seoul', category: 'food', food_tags: ['noodles', 'dumplings', 'soup'] }),
+    place('coffee', { category: 'cafe' }),
+  ];
+  assert.deepEqual(foodOptions(places, 'tokyo'), [
+    { id: 'ramen', label: 'Ramen', count: 1 },
+    { id: 'meat', label: 'Kött', count: 2 },
+    { id: 'bbq', label: 'Grillat / yakiniku', count: 2 },
+  ]);
+  assert.deepEqual(foodOptions(places, 'seoul'), [
+    { id: 'bbq', label: 'Koreansk BBQ', count: 1 },
+    { id: 'meat', label: 'Kött', count: 1 },
+    { id: 'soup', label: 'Soppor / gukbap', count: 1 },
+    { id: 'noodles', label: 'Nudlar / kalguksu', count: 1 },
+    { id: 'dumplings', label: 'Mandu', count: 1 },
+  ]);
+  assert.equal(foodTypeLabel('dumplings', 'hakone'), 'Gyoza');
+  assert.equal(foodTypeLabel('noodles', 'kyoto'), 'Soba & andra nudlar');
+  assert.deepEqual(foodOptions(places, 'osaka'), []);
+});
+test('food type filtering narrows restaurants while preserving selected activities and cafes', () => {
+  const numbered = numberPlaces([
+    place('walk'),
+    place('sushi', { category: 'food', food_tags: ['sushi'] }),
+    place('grill', { category: 'food', food_tags: ['bbq', 'meat'], sequence: 2 }),
+    place('ramen', { category: 'food', food_tags: ['ramen'], sequence: 3 }),
+    place('undated-ramen', { category: 'food', food_tags: ['ramen'], date: '', status: 'Valfritt' }),
+    place('coffee', { category: 'cafe' }),
+  ]);
+  const state = { city: 'tokyo', day: '2026-10-08', query: '', categories: ['activity', 'food', 'cafe'], optional: false, foodType: 'ramen' };
+  assert.deepEqual(filterPlaces(numbered, state).map(p => p.id), ['walk', 'coffee', 'ramen', 'undated-ramen']);
+  assert.deepEqual(filterPlaces(numbered, { ...state, categories: ['food'] }).map(p => p.label), ['M3', 'M4']);
+  assert.equal(filterPlaces(numbered, { ...state, foodType: 'all' }).length, 6);
+  assert.equal(filterPlaces(numbered, { ...state, foodType: '' }).length, 6);
+  assert.deepEqual(filterPlaces(numbered, { ...state, foodType: '', query: 'kott' }).map(p => p.id), ['grill']);
+  assert.deepEqual(filterPlaces(numbered, { ...state, query: 'M3' }).map(p => p.id), ['ramen']);
+  assert.equal(numbered.find(p => p.id === 'ramen').label, 'M3');
+});
+test('shared filter URLs restore valid food types and categories without leaking filters across countries', () => {
+  const data = { ...base, cities: [...base.cities, { id: 'seoul', name: 'Seoul' }], places: [
+    place('ramen', { category: 'food', food_tags: ['ramen'] }),
+    place('seoul-bbq', { city: 'seoul', category: 'food', food_tags: ['bbq'] }),
+  ] };
+  const selection = query => initialSelection(data, new URLSearchParams(query));
+  const ramen = selection('city=tokyo&food=ramen');
+  assert.equal(ramen.foodType, 'ramen');
+  assert.deepEqual(ramen.categories, ['food']);
+  const withActivities = selection('city=tokyo&food=ramen&categories=activity,food,unknown,__proto__');
+  assert.deepEqual(withActivities.categories, ['activity', 'food']);
+  assert.equal(withActivities.foodType, 'ramen');
+  assert.equal(selection('city=tokyo&food=ramen&categories=activity').foodType, '');
+  assert.deepEqual(selection('city=tokyo&categories=').categories, []);
+  assert.equal(selection('city=seoul&food=ramen').foodType, '');
+  assert.deepEqual(selection('city=seoul&food=ramen').categories, ['activity', 'food', 'cafe', 'sweet']);
+  assert.equal(selection('city=seoul&food=bbq').foodType, 'bbq');
+  assert.equal(selection('city=tokyo&food=constructor').foodType, '');
+  assert.equal(selection('city=tokyo&food=all').foodType, 'all');
+  assert.deepEqual(selection('city=tokyo&food=all').categories, ['food']);
+});
+test('food tags reject unknown, duplicate, empty and non-restaurant classifications', () => {
+  assert.doesNotThrow(() => validateData({ ...base, places: [place('meal', { category: 'food', food_tags: ['sushi', 'seafood'] })] }));
+  for (const food_tags of ['ramen', [], ['not-a-food'], ['ramen', 'ramen'], [null], ['constructor']]) {
+    assert.throws(() => validateData({ ...base, places: [place('meal', { category: 'food', food_tags })] }), /Ogiltig plats/);
+  }
+  assert.throws(() => validateData({ ...base, places: [place('walk', { food_tags: ['ramen'] })] }), /Ogiltig plats/);
+});
+test('photos require HTTPS images, a safe source link and attribution metadata', () => {
+  const photo = { src: 'https://example.com/venue.jpg', source: 'https://example.com/venue', alt: 'Restaurangens matsal', credit: 'Restaurangen' };
+  const dataWith = photos => ({ ...base, places: [place('venue', { photos })] });
+  assert.doesNotThrow(() => validateData(dataWith([photo])));
+  assert.doesNotThrow(() => validateData(dataWith([])));
+  for (const photos of [
+    'https://example.com/venue.jpg', [null],
+    [{ ...photo, src: 'http://example.com/venue.jpg' }],
+    [{ ...photo, src: 'javascript:alert(1)' }],
+    [{ ...photo, src: 'data:image/png;base64,AA==' }],
+    [{ ...photo, source: 'javascript:alert(1)' }],
+    [{ ...photo, source: undefined }],
+    [{ ...photo, alt: undefined }],
+    [{ ...photo, credit: undefined }],
+  ]) assert.throws(() => validateData(dataWith(photos)), /Ogiltig plats/);
 });
 test('encrypted datasets authenticate changes and require the correct key', () => {
   const key = randomBytes(32), encrypted = encryptText('private dataset', key);

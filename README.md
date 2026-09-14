@@ -6,11 +6,15 @@ Private travel map and day plan on the existing GitHub Pages sites. Vanilla Java
 
 `data/trip-shared.enc.json` contains the common cities. Both sites load this exact URL. `data/trip-extension.enc.json` contains the continuation of the longer trip. The shorter site's encrypted configuration only contains the shared dataset key.
 
-Map markers, search results, place details and Dagsplan all render from these records. Stable `id` values identify places; `date`, `sequence`, `category` and `status` determine presentation and numbering. Numbers are computed before filtering, so they stay consistent between views. City maps always include the entire stay, including old links with a day parameter. Their lists show activities 1, 2, 3, then optional activities V1, V2, food M1, M2, cafes K1, K2 and sweets S1, S2. Day selection remains available in Dagsplan.
+Map markers, search results, place details and Dagsplan all render from these records. Stable `id` values identify places; `date`, `sequence`, `category` and `status` determine presentation and numbering. Numbers are computed before filtering, so they stay consistent between views. Dated activities start with the October day: 3.1, 3.2, then 4.1 on the next day. Dated optional activities use 3.V1; undated options use V1. Food M1, cafes K1 and sweets S1 retain city-wide numbering. City maps always include the entire stay, including old links with a day parameter. Day selection remains available in Dagsplan.
 
 Cafe records use category `cafe` and brown markers (`#8b5e34`). Coffee/tea stops belong here; dessert-focused shops remain in `sweet`. Categories can be toggled independently. The mobile category strip scrolls horizontally on narrow screens, while the map retains its full viewport. New recommendations use an empty date and optional status, carry source URLs and a review date, and do not create bookings or change the planned activity order.
 
-The original code gates are retained. Dataset keys and the original logistics document are inside their encrypted payloads, never in public application code. Original checklist IDs and local-storage namespaces are retained. The Resedetaljer iframe displays the original bookings, checklists and practical information, with duplicate activity/restaurant sections removed from its displayed document.
+Food records carry curated `food_tags` using `FOOD_TYPES` in the model. The food selector shows only types present in the city, with counts and Korean/Japanese labels. Choosing a type shows matching restaurants; visitors can add other categories afterwards. Changing city resets the food type to all restaurants. Choosing “Alla platser” restores every category. Filter state is preserved in the URL. Types describe a venue's characteristic dishes, not dietary suitability or every ingredient.
+
+Place photos use `photos: [{src, alt, credit, source}]` with verified HTTPS image/source URLs. They load only when a place is opened, have source credits, and open at full size when selected. Failed or unavailable photos offer the place's Google Maps link. Keep pictures tied to the exact venue/branch; do not substitute generic cuisine imagery. Source sites control remote photo availability.
+
+The original code gates are retained. Dataset keys and the original logistics document are inside their encrypted payloads, never in public application code. Original checklist IDs and local-storage namespaces are retained. The Resedetaljer iframe displays the original bookings, checklists and practical information, with duplicate activity/restaurant sections removed from its displayed document. `assets/trip-details.css` applies the map/day-plan theme without changing the original forms or scripts.
 
 ## Update places
 
@@ -32,7 +36,7 @@ Bookings and practical notes are separate from the map's place records. If chang
 
 - MapLibre GL JS 5.6.1, pinned CDN files with SRI.
 - OpenFreeMap Liberty vector map, with visible OpenMapTiles/OpenStreetMap attribution.
-- Google Maps directions open when the visitor chooses Navigera. No Google account, Maps API key or import is required for the website.
+- “Öppna Google Maps” opens the place search by venue name/address, not a directions request. Visitors can view photos/reviews and choose directions inside Google Maps. No Google account, Maps API key or import is required for the website.
 - The map needs internet. If its library or tiles fail, the place list, Dagsplan and directions links remain usable. If the encrypted dataset cannot load, the original document is available as a recovery option.
 - The page reads device location only after the visitor presses the map's location control.
 
@@ -46,4 +50,4 @@ Tokens: primary `#1a73e8`, food `#c4443f`, sweets `#8657b0`, text `#18202f`, sec
 
 Run `node --test tests/model.test.mjs` for category/date/search behavior, stable numbering, timezone/deep-link selection, invalid import rejection and authenticated encryption.
 
-Browser QA covers both code gates, marker/list parity, search, category filters, map/plan parity, directions URLs, saved checklist persistence, mobile list/detail views, locking, recovery and the short site's restricted city list. Test previews and browser downloads belong outside these repositories and must not be published with private screenshots or decrypted data.
+Browser QA covers both code gates, marker/list parity, country-aware food/category filters, map/plan date-label parity, Google Maps place URLs, photo loading/fallback, saved checklist persistence, mobile list/detail views, locking, recovery and the short site's restricted city list. Test previews and browser downloads belong outside these repositories and must not be published with private screenshots or decrypted data.

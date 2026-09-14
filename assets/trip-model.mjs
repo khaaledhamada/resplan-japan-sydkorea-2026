@@ -6,6 +6,26 @@ export const CATEGORIES = {
   sweet: { name: 'Sötsaker', singular: 'Sötsaker & fika', color: '#8657b0' },
 };
 
+export const FOOD_TYPES = {
+  sushi: 'Sushi', ramen: 'Ramen', meat: 'Kött', bbq: 'Grillat / yakiniku',
+  noodles: 'Soba & andra nudlar', dumplings: 'Gyoza', streetfood: 'Gatumat',
+  seafood: 'Fisk & skaldjur', japanese: 'Japanskt & kaiseki', soup: 'Soppor',
+  bibimbap: 'Bibimbap', tofu: 'Tofu', curry: 'Japansk curry',
+  tonkatsu: 'Tonkatsu', okonomiyaki: 'Okonomiyaki',
+};
+export function foodTypeLabel(type, city) {
+  const korean = { bbq: 'Koreansk BBQ', noodles: 'Nudlar / kalguksu', dumplings: 'Mandu', soup: 'Soppor / gukbap' };
+  return (city === 'seoul' && korean[type]) || FOOD_TYPES[type] || '';
+}
+export function foodOptions(places, city) {
+  const priority = city === 'seoul'
+    ? ['bbq', 'meat', 'soup', 'noodles', 'dumplings', 'bibimbap', 'streetfood', 'seafood']
+    : ['sushi', 'ramen', 'meat', 'bbq', 'tonkatsu', 'noodles', 'dumplings', 'seafood', 'streetfood', 'okonomiyaki', 'tofu', 'curry', 'japanese'];
+  return [...new Set([...priority, ...Object.keys(FOOD_TYPES)])].map(id => ({
+    id, label: foodTypeLabel(id, city), count: places.filter(p => p.city === city && p.category === 'food' && p.food_tags?.includes(id)).length,
+  })).filter(option => option.count);
+}
+
 export function validateData(data) {
   const validDay = day => /^2026-10-(0[1-9]|[12]\d|3[01])$/.test(day);
   if (data.schema !== 1 || !Array.isArray(data.cities) || !data.cities.length || !Array.isArray(data.places) || typeof data.updatedAt !== 'string' || !Number.isFinite(Date.parse(data.updatedAt))) throw Error('Ogiltigt dataformat');
@@ -21,7 +41,9 @@ export function validateData(data) {
         !Number.isFinite(p.lat) || !Number.isFinite(p.lon) || Math.abs(p.lat) > 90 || Math.abs(p.lon) > 180 ||
         typeof p.name !== 'string' || !p.name.trim() || !Number.isFinite(p.sequence) ||
         typeof p.date !== 'string' || (p.date && !validDay(p.date)) ||
-        typeof p.description_sv !== 'string' || typeof p.address !== 'string') throw Error('Ogiltig plats: ' + p.id);
+        typeof p.description_sv !== 'string' || typeof p.address !== 'string' ||
+        (p.food_tags !== undefined && (!Array.isArray(p.food_tags) || p.category !== 'food' || !p.food_tags.length || new Set(p.food_tags).size !== p.food_tags.length || p.food_tags.some(tag => !Object.hasOwn(FOOD_TYPES, tag)))) ||
+        (p.photos !== undefined && (!Array.isArray(p.photos) || p.photos.some(photo => !photo || !safeLink(photo.src)?.startsWith('https:') || !safeLink(photo.source) || typeof photo.alt !== 'string' || typeof photo.credit !== 'string')))) throw Error('Ogiltig plats: ' + p.id);
     ids.add(p.id);
   }
   return data;
@@ -36,9 +58,10 @@ export function numberPlaces(places) {
   const counters = {};
   return orderedPlaces(places).map(p => {
     const prefix = p.category === 'food' ? 'M' : p.category === 'cafe' ? 'K' : p.category === 'sweet' ? 'S' : p.status === 'Valfritt' ? 'V' : '';
-    const key = p.city + ':' + prefix;
+    const dated = p.category === 'activity' && p.date;
+    const key = p.city + ':' + prefix + (dated ? ':' + p.date : '');
     counters[key] = (counters[key] || 0) + 1;
-    return { ...p, label: prefix + counters[key] };
+    return { ...p, label: (dated ? Number(p.date.slice(-2)) + '.' : '') + prefix + counters[key] };
   });
 }
 
@@ -61,7 +84,8 @@ export function filterPlaces(places, state) {
   const query = fold(state.query || '');
   return places.filter(p => p.city === state.city && (!state.day || !p.date || p.date === state.day) &&
     state.categories.includes(p.category) && (state.optional || p.category !== 'activity' || p.status !== 'Valfritt') &&
-    (!query || fold([p.name, p.area, p.address, p.description_sv, p.label].join(' ')).includes(query)));
+    (p.category !== 'food' || !state.foodType || state.foodType === 'all' || p.food_tags?.includes(state.foodType)) &&
+    (!query || fold([p.name, p.area, p.address, p.description_sv, p.label, ...(p.food_tags || []).map(tag => foodTypeLabel(tag, p.city))].join(' ')).includes(query)));
 }
 
 export function daysForCity(data, city) {
@@ -83,12 +107,16 @@ export function initialSelection(data, params, now = new Date()) {
   const view = ['map', 'plan', 'details'].includes(params.get('view')) ? params.get('view') : 'map';
   // The city map always includes every day, including links made before that change.
   const day = view === 'map' ? '' : params.has('day') ? (days.includes(requestedDay) ? requestedDay : '') : (days.includes(localDay(city)) ? localDay(city) : days[0] || '');
-  return { city: city.id, day, query: '', categories: Object.keys(CATEGORIES), optional: true, view, selected: params.get('place') || null };
+  const requestedFood = params.get('food');
+  const foodType = requestedFood === 'all' || foodOptions(data.places, city.id).some(o => o.id === requestedFood) ? requestedFood : '';
+  const requestedCategories = params.has('categories') ? params.get('categories').split(',').filter(c => Object.hasOwn(CATEGORIES, c)) : null;
+  const categories = requestedCategories || (foodType ? ['food'] : Object.keys(CATEGORIES));
+  return { city: city.id, day, query: '', categories, foodType: categories.includes('food') ? foodType : '', optional: true, view, selected: params.get('place') || null };
 }
 
-export function navigationUrl(p) {
+export function googleMapsUrl(p) {
   // Search by name/address preserves venue identity; coordinates remain the map's location fallback.
-  return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(p.name.split(' – ')[0] + ', ' + p.address);
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.name.split(' – ')[0] + ', ' + p.address);
 }
 
 export function safeLink(value) {
