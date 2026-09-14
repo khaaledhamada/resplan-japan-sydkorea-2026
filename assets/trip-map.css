@@ -7,5 +7,83 @@
 .search-field input::-webkit-search-cancel-button{display:none}
 @media(max-width:700px){.app.sheet-open .places-panel{top:var(--controls-height,240px);height:auto;border-radius:0;box-shadow:none}.app.sheet-open .map-view{visibility:hidden}}
 @media(max-width:700px){:root{--sheet:214px}.place-detail{bottom:24px}}
+/* MapLibre positions the outer marker at its geographic coordinate. Keep it
+   out of document flow and keep the visible tip fixed when its size changes. */
+.pin.maplibregl-marker{position:absolute;top:0;left:0;margin:0;--pin-size:35px}
+.pin.maplibregl-marker .pin-shape{position:absolute;left:50%;bottom:calc(var(--pin-size)*.2071067812);margin-left:calc(var(--pin-size)*-.5);width:var(--pin-size);height:var(--pin-size)}
+@media(max-width:700px){.pin.maplibregl-marker{--pin-size:31px}}
+.pin.maplibregl-marker[aria-pressed=true]{--pin-size:42px}
+/* The city map includes the whole stay. Date selection belongs to Dagsplan. */
+.search-row{display:flex;align-items:center;gap:8px}
+.search-row .search-field{flex:1;min-width:0}
+.app[data-view=map] .day-filter,.app[data-view=map] .optional-toggle{display:none}
+.app[data-view=map] .selects{grid-template-columns:1fr}
+.app[data-view=map] .chips{margin-bottom:18px}
+.map-place-group h3{font-size:12px;line-height:1.5;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 10px;font-weight:700}
+.map-place-group:first-child h3{margin-top:12px}
+.map-place-group .place-row:first-of-type{border-top:0}
+
+/* On phones the map is the entire canvas; controls and lists float over it. */
+@media(max-width:700px),(max-width:1000px) and (max-height:500px){
+  .app[data-view=map]{display:block;--map-nav:calc(62px + env(safe-area-inset-bottom));--map-peek:56px}
+  .app[data-view=map] .workspace{position:absolute;inset:0;width:100%;height:100%}
+  .app[data-view=map] .sidebar{display:contents;border:0}
+  .app[data-view=map] .rail{position:absolute;inset:auto 0 0;height:var(--map-nav);min-height:62px;flex-direction:row;justify-content:space-around;padding:0 8px env(safe-area-inset-bottom);border-right:0;border-top:1px solid var(--line);z-index:12}
+  .app[data-view=map] .rail .brand,.app[data-view=map] .rail .lock-button{display:none}
+  .app[data-view=map] .nav-button{width:31%;min-height:61px;padding:8px 3px;gap:3px;font-size:10px}
+  .app[data-view=map] .nav-button .icon{width:22px;height:22px}
+  .app[data-view=map] .nav-button[aria-current=page]{background:transparent}
+  .app[data-view=map] .nav-button[aria-current=page] .icon{box-shadow:0 0 0 5px #e9f2ff;border-radius:4px}
+  .app[data-view=map] .controls{position:absolute;top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));padding:0;border:0;background:transparent;display:grid;grid-template-columns:minmax(100px,1fr) auto;gap:9px 8px;pointer-events:none;z-index:6}
+  .app[data-view=map] .controls>*{pointer-events:auto}
+  .app[data-view=map] .identity{display:none}
+  .app[data-view=map] .search-row{grid-column:1 / -1}
+  .app[data-view=map] .search-field{height:46px;border-radius:26px;background:white;border:0;box-shadow:0 2px 8px #21365125;padding:0 15px;gap:9px}
+  .app[data-view=map] .search-field input{font-size:16px}
+  .app[data-view=map] .mobile-lock{display:grid;place-items:center;width:44px;height:44px;min-width:44px;border-radius:50%;background:white;box-shadow:0 2px 8px #21365125}
+  .app[data-view=map] .mobile-lock .icon{width:20px;height:20px}
+  .app[data-view=map] .selects{display:block;margin:0;min-width:0}
+  .app[data-view=map] .select-box{height:36px;min-height:36px;border:0;border-radius:22px;background:white;padding:0 9px;display:flex;align-items:center;box-shadow:0 2px 8px #21365120}
+  .app[data-view=map] .select-box>span{display:none}
+  .app[data-view=map] .select-box select{min-width:0;font-size:16px;min-height:30px}
+  .app[data-view=map] .day-filter{display:none}
+  .app[data-view=map] .chips{flex-wrap:nowrap;gap:6px;margin:0}
+  .app[data-view=map] .chip{font-size:12px;min-height:36px;padding:6px 9px;background:white;box-shadow:0 2px 8px #21365118}
+  .app[data-view=map] .chip[aria-pressed=true]{background:color-mix(in srgb,var(--cat) 7%,white)}
+  .app[data-view=map] .chip .tick{display:none}
+  .app[data-view=map] .places-panel{position:absolute;top:auto;left:10px;right:10px;bottom:calc(var(--map-nav) + 14px);height:var(--map-peek);max-height:calc(100% - var(--controls-height,92px) - var(--map-nav) - 35px);flex:none;background:white;border:0;border-radius:16px;box-shadow:0 3px 20px #18314f2b;z-index:7;overflow:hidden;transition:height .2s ease}
+  .app[data-view=map] .list-heading{padding:9px 12px;min-height:var(--map-peek);display:flex;align-items:center;justify-content:space-between;gap:4px;border:0}
+  .app[data-view=map] .list-heading:before{display:none}
+  .app[data-view=map] .list-summary{display:flex;flex-wrap:wrap;gap:3px 6px;align-items:baseline;min-width:0}
+  .app[data-view=map] .list-heading h2{font-size:15px;letter-spacing:-.15px;margin:0}
+  .app[data-view=map] .list-count{display:inline;margin:0;font-size:11px;white-space:nowrap}
+  .app[data-view=map] .list-count:before{content:'· ';color:#8490a2}
+  .app[data-view=map] .list-heading p{display:none}
+  .app[data-view=map] .sheet-toggle{display:block;position:static;font-size:12px;padding:6px 2px;min-height:38px;white-space:nowrap;flex:none;color:var(--blue);font-weight:600}
+  .app[data-view=map]:not(.sheet-open) .place-list{display:none}
+  .app[data-view=map].sheet-open .places-panel{top:auto;height:70dvh;border-radius:18px 18px 12px 12px}
+  .app[data-view=map].sheet-open .map-view{visibility:visible}
+  .app[data-view=map].sheet-open .list-heading{border-bottom:1px solid var(--line)}
+  .app[data-view=map] .place-list{padding:0 17px 12px}
+  .app[data-view=map] .place-row{min-height:71px;padding:12px 0;gap:11px}
+  .app[data-view=map] .number{width:38px;height:38px;font-size:12px}
+  .app[data-view=map] .map-tools{top:calc(var(--controls-height,92px) + max(10px,env(safe-area-inset-top)) + 9px);left:10px}
+  .app[data-view=map] .floating-button{min-height:34px;font-size:11px;padding:7px 11px;border-radius:19px}
+  .app[data-view=map] .map-help{display:none}
+  .app[data-view=map] .maplibregl-ctrl-bottom-right{bottom:calc(var(--map-nav) + var(--map-peek) + 24px)!important;right:0!important}
+  .app[data-view=map] .maplibregl-ctrl-group button{width:38px!important;height:38px!important}
+  .app[data-view=map] .maplibregl-ctrl-bottom-left,.app[data-view=map].has-selection .maplibregl-ctrl-bottom-left{bottom:var(--map-nav)!important;max-width:100%}
+  .app[data-view=map] .maplibregl-ctrl-attrib{font-size:9px!important;line-height:14px!important}
+  .app[data-view=map].sheet-open .maplibregl-ctrl-bottom-right{visibility:hidden}
+  .app[data-view=map] .place-detail{left:10px;right:10px;top:auto;bottom:calc(var(--map-nav) + 14px);width:auto;max-height:min(60dvh,calc(100dvh - var(--controls-height,92px) - 190px));padding:18px;border-radius:16px;z-index:10}
+  .app[data-view=map].has-selection .places-panel{display:none}
+  .app[data-view=map].has-selection .maplibregl-ctrl-bottom-right{visibility:hidden}
+  .app[data-view=map] .map-status{top:calc(var(--controls-height,92px) + max(10px,env(safe-area-inset-top)) + 51px);left:10px;right:10px;font-size:11px;padding:9px 11px}
+  .app[data-view=map] .toast{bottom:calc(var(--map-nav) + var(--map-peek) + 25px)}
+}
+@media(max-width:360px){
+  .app[data-view=map] .chip{font-size:11px;padding-left:7px;padding-right:7px}
+  .app[data-view=map] .chips{gap:5px}
+}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 @media print{.app,.app[data-view=details]{display:block;height:auto;overflow:visible}.rail,.sidebar,.map-view,.toast{display:none!important}.workspace,.plan-view,.details-view{position:static;height:auto;overflow:visible}.plan-view{display:block!important;padding:0}.plan-place{break-inside:avoid}.plan-place .actions{display:none}.plan-day{break-inside:auto}.plan-day-title h3{break-after:avoid}}

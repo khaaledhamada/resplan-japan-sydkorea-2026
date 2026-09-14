@@ -1,4 +1,4 @@
-import { CATEGORIES, validateData, numberPlaces, filterPlaces, daysForCity, dayText, initialSelection, navigationUrl, safeLink } from './trip-model.mjs?v=20260914.1';
+import { CATEGORIES, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, navigationUrl, safeLink } from './trip-model.mjs?v=20260914.2';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -20,7 +20,7 @@ const badge = p => `<span class="number${isOptionalActivity(p) ? ' optional' : '
 const external = (url, label, cls = '') => `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 const bytes = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const mobile = () => matchMedia('(max-width: 700px)').matches;
+const mobile = () => matchMedia('(max-width: 700px), (max-width: 1000px) and (max-height: 500px)').matches;
 let data, state, map, markers = [], places = [], matching = [], toastTimer, detailOrigin, loadedDetails = false, mapStarting = false;
 
 async function readDataset(descriptor) {
@@ -43,22 +43,22 @@ function layout() {
     </nav>
     <aside class="sidebar" aria-label="Välj och hitta resans platser">
       <div class="controls">
-        <label class="search-field">${icon('search')}<input id="search" type="search" placeholder="Sök bland resans platser" aria-label="Sök platser i vald stad" autocomplete="off"><button class="search-clear" id="clear-search" aria-label="Rensa sökning" hidden>×</button></label>
-        <header class="identity"><div><h1>Resekartan</h1><p>${esc(config.subtitle)}</p></div><button class="mobile-lock" data-lock aria-label="Lås sidan">${icon('lock')}</button></header>
-        <div class="selects"><label class="select-box"><span>Stad</span><select id="city" aria-label="Stad"></select></label><label class="select-box"><span>Dag</span><select id="day" aria-label="Dag"></select></label></div>
+        <div class="search-row"><label class="search-field">${icon('search')}<input id="search" type="search" placeholder="Sök bland resans platser" aria-label="Sök platser i vald stad" autocomplete="off"><button class="search-clear" id="clear-search" aria-label="Rensa sökning" hidden>×</button></label><button class="mobile-lock" data-lock aria-label="Lås sidan">${icon('lock')}</button></div>
+        <header class="identity"><div><h1>Resekartan</h1><p>${esc(config.subtitle)}</p></div></header>
+        <div class="selects"><label class="select-box"><span>Stad</span><select id="city" aria-label="Stad"></select></label><label class="select-box day-filter"><span>Dag</span><select id="day" aria-label="Dag"></select></label></div>
         <div class="chips" role="group" aria-label="Visa kategorier">${Object.entries(CATEGORIES).map(([key, c]) => `<button class="chip" style="--cat:${c.color}" data-category="${key}" aria-pressed="true"><span class="tick" aria-hidden="true">✓</span>${c.name}</button>`).join('')}</div>
         <label class="optional-toggle"><input id="optional" type="checkbox" checked>Visa även valfria aktiviteter (V)</label>
       </div>
       <section class="places-panel" aria-label="Platslista">
-        <div class="list-heading"><h2 id="list-title"></h2><p>Börja vid dagens lägsta aktivitetsnummer.</p><span class="list-count" id="list-count" role="status"></span><button class="sheet-toggle" id="sheet-toggle" aria-expanded="false" aria-controls="place-list">Visa lista ↑</button></div>
+        <div class="list-heading"><div class="list-summary"><h2 id="list-title"></h2><span class="list-count" id="list-count" role="status"></span></div><p>Aktiviteter i nummerordning, sedan valfria stopp.</p><button class="sheet-toggle" id="sheet-toggle" aria-expanded="false" aria-controls="place-list">Visa lista ↑</button></div>
         <div class="place-list" id="place-list"></div>
       </section>
     </aside>
     <main class="workspace" id="workspace">
       <section class="map-view" id="map-view" aria-label="Interaktiv resekarta">
         <div class="map-canvas" id="map" aria-label="Karta över resans platser"></div>
-        <div class="map-tools"><button class="floating-button" id="fit-map">${icon('list')}Visa alla stopp</button></div>
-        <div class="map-help">01 = aktiviteter · M = mat · S = sött<br>V = valfritt. Nålarna är inte en gångrutt.</div>
+        <div class="map-tools"><button class="floating-button" id="fit-map">${icon('list')}Visa alla</button></div>
+        <div class="map-help">1, 2, 3 = aktiviteter · M = mat · S = sött<br>V = valfritt. Nålarna är inte en gångrutt.</div>
         <div class="map-status" id="map-status" role="status" hidden></div>
         <section class="place-detail" id="place-detail" aria-label="Platsdetaljer" hidden></section>
       </section>
@@ -72,7 +72,7 @@ function layout() {
   updateDays();
   new ResizeObserver(() => $('app').style.setProperty('--controls-height', document.querySelector('.controls').offsetHeight + 'px')).observe(document.querySelector('.controls'));
   $('city').addEventListener('change', () => {
-    state.city = $('city').value; state.day = daysForCity(data, state.city)[0] || ''; state.query = ''; $('search').value = ''; updateDays(); refresh();
+    state.city = $('city').value; state.day = state.view === 'map' ? '' : daysForCity(data, state.city)[0] || ''; state.query = ''; $('search').value = ''; updateDays(); refresh();
   });
   $('day').addEventListener('change', () => { state.day = $('day').value; refresh(); });
   $('search').addEventListener('input', () => { state.query = $('search').value; refresh(); });
@@ -93,9 +93,14 @@ function layout() {
     const expanded = $('app').classList.toggle('sheet-open');
     $('sheet-toggle').setAttribute('aria-expanded', String(expanded));
     $('sheet-toggle').textContent = expanded ? 'Visa karta ↓' : 'Visa lista ↑';
+    if (!expanded) fitMap();
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDetail(true); });
-  window.addEventListener('resize', () => map?.resize());
+  window.addEventListener('resize', () => requestAnimationFrame(() => {
+    map?.resize();
+    const selected = places.find(p => p.id === state.selected);
+    if (selected) focusPlace(selected, false); else fitMap();
+  }));
   window.addEventListener('popstate', () => {
     state = initialSelection(data, new URLSearchParams(location.search));
     $('city').value = state.city; $('search').value = state.query; $('optional').checked = state.optional;
@@ -110,7 +115,8 @@ function updateDays() {
 
 function updateUrl() {
   const url = new URL(location.href);
-  url.searchParams.set('city', state.city); url.searchParams.set('day', state.day); url.searchParams.set('view', state.view);
+  url.searchParams.set('city', state.city); url.searchParams.set('view', state.view);
+  if (state.view === 'map') url.searchParams.delete('day'); else url.searchParams.set('day', state.day);
   if (state.selected) url.searchParams.set('place', state.selected); else url.searchParams.delete('place');
   url.hash = '';
   history.replaceState(null, '', url);
@@ -118,27 +124,37 @@ function updateUrl() {
 
 function refresh(clear = true) {
   if (clear) closeDetail();
+  if (state.view === 'map') { state.day = ''; state.optional = true; $('optional').checked = true; }
   matching = filterPlaces(places, state);
-  $('list-title').textContent = state.day ? dayText(state.day, true) : data.cities.find(c => c.id === state.city).name + ' · alla dagar';
+  $('list-title').textContent = data.cities.find(c => c.id === state.city).name;
   $('list-count').textContent = matching.length + (matching.length === 1 ? ' plats' : ' platser') + (state.day ? ' · även alternativ utan fast dag' : '');
   $('clear-search').hidden = !state.query;
   document.querySelectorAll('[data-category]').forEach(b => {
     const selected = state.categories.includes(b.dataset.category);
     b.setAttribute('aria-pressed', String(selected)); b.querySelector('.tick').textContent = selected ? '✓' : '';
   });
-  $('place-list').innerHTML = matching.length ? matching.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)} · ${esc(p.status === 'Valfritt' ? 'Valfritt' : CATEGORIES[p.category].singular)}${!state.day ? ' · ' + dayText(p.date) : !p.date ? ' · valfri dag' : ''}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan dag eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
+  $('place-list').innerHTML = matching.length ? groupMapPlaces(matching).map(group => `<section class="map-place-group" data-group="${group.id}" aria-labelledby="group-${group.id}"><h3 id="group-${group.id}">${group.title}</h3>${group.places.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)} · ${esc(p.status === 'Valfritt' ? 'Valfritt' : CATEGORIES[p.category].singular)}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('')}</section>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan sökning eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
   $('place-list').querySelectorAll('[data-place]').forEach(b => b.addEventListener('click', () => selectPlace(b.dataset.place, b)));
   $('reset-filters')?.addEventListener('click', () => { state.day = ''; state.query = ''; state.categories = Object.keys(CATEGORIES); state.optional = true; $('search').value = ''; $('optional').checked = true; updateDays(); refresh(); });
   renderPlan(); renderMarkers(); fitMap(); updateUrl();
 }
 
 function changeView(view, update = true) {
+  const previous = state.view;
+  if (previous === 'map' && view !== 'map') {
+    closeDetail(); $('app').classList.remove('sheet-open');
+    $('sheet-toggle').textContent = 'Visa lista ↑'; $('sheet-toggle').setAttribute('aria-expanded', 'false');
+  }
   state.view = view; $('app').dataset.view = view;
   for (const name of ['map', 'plan', 'details']) $(name + '-view').hidden = name !== view;
   document.querySelectorAll('.nav-button[data-view]').forEach(b => {
     if (b.dataset.view === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
-  if (view === 'map') { requestAnimationFrame(() => { map?.resize(); fitMap(); }); startMap(); }
+  if (view === 'map') {
+    state.day = ''; state.optional = true; updateDays();
+    if (previous !== view) refresh(false);
+    requestAnimationFrame(() => { map?.resize(); fitMap(); }); startMap();
+  }
   if (view === 'details') showDetails();
   if (update) updateUrl();
 }
@@ -155,11 +171,7 @@ function selectPlace(id, origin) {
   $('close-detail').addEventListener('click', () => closeDetail(true));
   document.querySelectorAll('[data-place]').forEach(e => e.setAttribute('aria-pressed', String(e.dataset.place === id)));
   requestAnimationFrame(() => {
-    if (map) {
-      const h = $('map').clientHeight, w = $('map').clientWidth;
-      map.easeTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 13), duration: reduced() ? 0 : 350,
-        padding: mobile() ? { top: 15, bottom: Math.min($('place-detail').offsetHeight + 20, Math.max(0, h - 120)), left: 30, right: 30 } : { top: 65, bottom: 50, left: 40, right: Math.min(400, Math.max(40, w - 150)) } });
-    }
+    focusPlace(p);
     $('detail-title').focus({ preventScroll: true });
   });
   updateUrl();
@@ -169,7 +181,10 @@ function closeDetail(restore = false) {
   if (!$('place-detail')) return;
   state.selected = null; $('place-detail').hidden = true; $('app').classList.remove('has-selection');
   document.querySelectorAll('[data-place][aria-pressed=true]').forEach(e => e.setAttribute('aria-pressed', 'false'));
-  if (restore && detailOrigin?.isConnected) detailOrigin.focus({ preventScroll: true });
+  if (restore) {
+    const origin = detailOrigin?.isConnected && detailOrigin.getClientRects().length ? detailOrigin : mobile() ? $('sheet-toggle') : $('fit-map');
+    origin.focus({ preventScroll: true });
+  }
   if (restore) fitMap();
   updateUrl();
 }
@@ -186,7 +201,7 @@ function renderPlan() {
   for (const day of days) {
     const stops = matching.filter(p => p.date === day);
     if (!stops.length && !city.notes?.[day] && !state.day) continue;
-    html += `<section class="plan-day"><div class="plan-day-title"><h3>${dayText(day, true)}</h3><button class="text-button" data-map-day="${day}">Visa dagens karta</button></div>`;
+    html += `<section class="plan-day"><div class="plan-day-title"><h3>${dayText(day, true)}</h3><button class="text-button" data-map-day="${day}">Visa stadens karta</button></div>`;
     if (city.notes?.[day]) html += `<div class="notice">${esc(city.notes[day])}</div>`;
     const groups = [ ['Dagens ordning', p => p.category === 'activity' && p.status !== 'Valfritt'], ['Mat att välja bland', p => p.category === 'food'], ['Sötsaker & fika', p => p.category === 'sweet'], ['Valfria aktiviteter · om ni har tid och lust', p => p.category === 'activity' && p.status === 'Valfritt'] ];
     for (const [heading, check] of groups) { const group = stops.filter(check); if (group.length) html += `<h4 class="plan-section-title">${heading}</h4>` + group.map(planPlace).join(''); }
@@ -194,11 +209,11 @@ function renderPlan() {
     html += '</section>';
   }
   const flexible = matching.filter(p => !p.date);
-  if (flexible.length) html += '<section class="plan-day"><h3>Valfri dag under vistelsen</h3><p class="row-meta">Välj när det passar. Dessa alternativ återkommer i kartans dagsfilter.</p>' + flexible.map(planPlace).join('') + '</section>';
+  if (flexible.length) html += '<section class="plan-day"><h3>Valfri dag under vistelsen</h3><p class="row-meta">Välj när det passar. Alla alternativ finns också på stadens karta.</p>' + flexible.map(planPlace).join('') + '</section>';
   html += `<footer class="data-version">Platslista uppdaterad ${esc(data.updatedAt.slice(0, 10))}. Ändringar i den gemensamma listan visas här och på kartan när sidan laddas om.<br>Kartan visar platser, inte en beräknad gångrutt. Kartunderlag: OpenFreeMap / OpenMapTiles / OpenStreetMap.<br><button class="reload-button" id="reload-data">↻ Hämta senaste planen</button></footer>`;
   $('plan-view').innerHTML = html;
   $('plan-view').querySelectorAll('[data-show-place]').forEach(b => b.addEventListener('click', () => selectPlace(b.dataset.showPlace, b)));
-  $('plan-view').querySelectorAll('[data-map-day]').forEach(b => b.addEventListener('click', () => { state.day = b.dataset.mapDay; updateDays(); refresh(); changeView('map'); }));
+  $('plan-view').querySelectorAll('[data-map-day]').forEach(b => b.addEventListener('click', () => { closeDetail(); changeView('map'); }));
   $('reload-data').addEventListener('click', () => location.reload());
 }
 
@@ -273,6 +288,28 @@ function renderMarkers() {
   }
 }
 
+function cameraPadding(detail = false) {
+  const rect = $('map').getBoundingClientRect();
+  if (!mobile()) return detail
+    ? { top: 65, bottom: 50, left: 40, right: Math.min(400, Math.max(40, rect.width - 150)) }
+    : { top: 85, right: 65, bottom: 65, left: 65 };
+  const controls = document.querySelector('.controls').getBoundingClientRect();
+  const top = Math.max(35, controls.bottom - rect.top + 38);
+  // Use the collapsed target height, not an intermediate sheet-animation frame.
+  const peek = parseFloat(getComputedStyle($('app')).getPropertyValue('--map-peek')) || 56;
+  const overlayTop = detail ? $('place-detail').getBoundingClientRect().top : document.querySelector('.rail').getBoundingClientRect().top - peek - 14;
+  const bottom = Math.max(40, rect.bottom - overlayTop + 24);
+  // Leave room for a pin even on short screens or when rotating with details open.
+  const scale = Math.min(1, Math.max(0, rect.height - 70) / (top + bottom));
+  return { top: top * scale, bottom: bottom * scale, left: 35, right: 55 };
+}
+
+function focusPlace(p, zoom = true) {
+  if (!map || state.view !== 'map') return;
+  map.easeTo({ center: [p.lon, p.lat], zoom: zoom ? Math.max(map.getZoom(), 13) : map.getZoom(),
+    padding: cameraPadding(true), duration: reduced() || !zoom ? 0 : 350 });
+}
+
 function fitMap() {
   if (!map || state.view !== 'map') return;
   map.resize();
@@ -283,9 +320,7 @@ function fitMap() {
   const points = matching.length ? matching : places.filter(p => p.city === state.city);
   if (!points.length) return;
   const bounds = new window.maplibregl.LngLatBounds(); points.forEach(p => bounds.extend([p.lon, p.lat]));
-  const sheetHeight = parseFloat(getComputedStyle($('app')).getPropertyValue('--sheet')) || 214;
-  const bottom = mobile() ? Math.min(sheetHeight + 36, Math.max(35, $('map').clientHeight - 150)) : 65;
-  map.fitBounds(bounds, { padding: { top: 85, right: mobile() ? 55 : 65, bottom, left: mobile() ? 40 : 65 }, maxZoom: 14, duration: reduced() ? 0 : 300 });
+  map.fitBounds(bounds, { padding: cameraPadding(), maxZoom: 14, duration: reduced() ? 0 : 300 });
 }
 
 async function boot() {

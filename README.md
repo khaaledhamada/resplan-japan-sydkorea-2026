@@ -6,7 +6,7 @@ Private travel map and day plan on the existing GitHub Pages sites. Vanilla Java
 
 `data/trip-shared.enc.json` contains the common cities. Both sites load this exact URL. `data/trip-extension.enc.json` contains the continuation of the longer trip. The shorter site's encrypted configuration only contains the shared dataset key.
 
-Map markers, search results, place details and Dagsplan all render from these records. Stable `id` values identify places; `date`, `sequence`, `category` and `status` determine presentation and numbering. Numbers are computed before filtering, so they stay consistent between views. M means food, S sweets and V optional activities. Undated suggestions appear under each day and are explicitly marked as flexible.
+Map markers, search results, place details and Dagsplan all render from these records. Stable `id` values identify places; `date`, `sequence`, `category` and `status` determine presentation and numbering. Numbers are computed before filtering, so they stay consistent between views. City maps always include the entire stay, including old links with a day parameter. Their lists show activities 1, 2, 3, then optional activities V1, V2, food M1, M2 and sweets S1, S2. Day selection remains available in Dagsplan.
 
 The original code gates are retained. Dataset keys and the original logistics document are inside their encrypted payloads, never in public application code. Original checklist IDs and local-storage namespaces are retained. The Resedetaljer iframe displays the original bookings, checklists and practical information, with duplicate activity/restaurant sections removed from its displayed document.
 
@@ -36,7 +36,7 @@ Bookings and practical notes are separate from the map's place records. If chang
 
 ## Design
 
-Desktop: 80px navigation rail, 384px place panel, remaining width for the map. Mobile: compact search/day filters, map, expandable place list and bottom navigation. White panels, light dividers, restrained shadows, rounded search field and colored numbered pins follow the approved Maps-inspired concepts. Real map geography replaces the illustrative concept geography.
+Desktop: 80px navigation rail, 384px place panel, remaining width for the map. Mobile: full viewport map behind floating search, city/category filters, a collapsed list bar and bottom navigation. The list expands on demand; selected places open a detail card. Camera padding accounts for overlays and rotation. White panels, light dividers, restrained shadows, rounded search field and colored numbered pins follow the Maps-inspired concepts. Real map geography replaces the illustrative concept geography. Marker wrappers must stay absolutely positioned; their visible tips remain fixed when selected.
 
 Tokens: primary `#1a73e8`, food `#c4443f`, sweets `#8657b0`, text `#18202f`, secondary text `#637086`, borders `#e2e7ed`. Controls use system sans fonts. Components: navigation rail, search, city/day selects, category chips, optional activity toggle, numbered place row, map marker, place detail panel, daily plan, preserved logistics iframe.
 

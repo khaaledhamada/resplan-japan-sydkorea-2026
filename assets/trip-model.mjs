@@ -37,8 +37,18 @@ export function numberPlaces(places) {
     const prefix = p.category === 'food' ? 'M' : p.category === 'sweet' ? 'S' : p.status === 'Valfritt' ? 'V' : '';
     const key = p.city + ':' + prefix;
     counters[key] = (counters[key] || 0) + 1;
-    return { ...p, label: prefix + String(counters[key]).padStart(2, '0') };
+    return { ...p, label: prefix + counters[key] };
   });
+}
+
+export function groupMapPlaces(places) {
+  const ordered = orderedPlaces(places).sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), 'sv', { numeric: true }));
+  return [
+    { id: 'activity', title: 'Aktiviteter', matches: p => p.category === 'activity' && p.status !== 'Valfritt' },
+    { id: 'optional', title: 'Valfria aktiviteter', matches: p => p.category === 'activity' && p.status === 'Valfritt' },
+    { id: 'food', title: 'Mat', matches: p => p.category === 'food' },
+    { id: 'sweet', title: 'Sötsaker', matches: p => p.category === 'sweet' },
+  ].map(({ id, title, matches }) => ({ id, title, places: ordered.filter(matches) })).filter(group => group.places.length);
 }
 
 export function fold(text) {
@@ -68,8 +78,10 @@ export function initialSelection(data, params, now = new Date()) {
   // Fuji is a Tokyo day trip; select its dedicated map on the excursion day.
   if (!city) city = [...data.cities].reverse().find(c => daysForCity(data, c.id).includes(localDay(c))) || data.cities[0];
   const days = daysForCity(data, city.id), requestedDay = params.get('day');
-  const day = params.has('day') ? (days.includes(requestedDay) ? requestedDay : '') : (days.includes(localDay(city)) ? localDay(city) : days[0] || '');
-  return { city: city.id, day, query: '', categories: Object.keys(CATEGORIES), optional: true, view: ['map', 'plan', 'details'].includes(params.get('view')) ? params.get('view') : 'map', selected: params.get('place') || null };
+  const view = ['map', 'plan', 'details'].includes(params.get('view')) ? params.get('view') : 'map';
+  // The city map always includes every day, including links made before that change.
+  const day = view === 'map' ? '' : params.has('day') ? (days.includes(requestedDay) ? requestedDay : '') : (days.includes(localDay(city)) ? localDay(city) : days[0] || '');
+  return { city: city.id, day, query: '', categories: Object.keys(CATEGORIES), optional: true, view, selected: params.get('place') || null };
 }
 
 export function navigationUrl(p) {
