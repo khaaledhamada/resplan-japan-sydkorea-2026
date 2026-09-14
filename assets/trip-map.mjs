@@ -1,4 +1,4 @@
-import { CATEGORIES, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, navigationUrl, safeLink } from './trip-model.mjs?v=20260914.2';
+import { CATEGORIES, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, navigationUrl, safeLink } from './trip-model.mjs?v=20260914.3';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -58,7 +58,7 @@ function layout() {
       <section class="map-view" id="map-view" aria-label="Interaktiv resekarta">
         <div class="map-canvas" id="map" aria-label="Karta över resans platser"></div>
         <div class="map-tools"><button class="floating-button" id="fit-map">${icon('list')}Visa alla</button></div>
-        <div class="map-help">1, 2, 3 = aktiviteter · M = mat · S = sött<br>V = valfritt. Nålarna är inte en gångrutt.</div>
+        <div class="map-help">1, 2, 3 = aktiviteter · M = mat<br>K = kaféer · S = sött · V = valfritt</div>
         <div class="map-status" id="map-status" role="status" hidden></div>
         <section class="place-detail" id="place-detail" aria-label="Platsdetaljer" hidden></section>
       </section>
@@ -203,7 +203,7 @@ function renderPlan() {
     if (!stops.length && !city.notes?.[day] && !state.day) continue;
     html += `<section class="plan-day"><div class="plan-day-title"><h3>${dayText(day, true)}</h3><button class="text-button" data-map-day="${day}">Visa stadens karta</button></div>`;
     if (city.notes?.[day]) html += `<div class="notice">${esc(city.notes[day])}</div>`;
-    const groups = [ ['Dagens ordning', p => p.category === 'activity' && p.status !== 'Valfritt'], ['Mat att välja bland', p => p.category === 'food'], ['Sötsaker & fika', p => p.category === 'sweet'], ['Valfria aktiviteter · om ni har tid och lust', p => p.category === 'activity' && p.status === 'Valfritt'] ];
+    const groups = [ ['Dagens ordning', p => p.category === 'activity' && p.status !== 'Valfritt'], ['Mat att välja bland', p => p.category === 'food'], ['Kaféer · kaffe och te', p => p.category === 'cafe'], ['Sötsaker', p => p.category === 'sweet'], ['Valfria aktiviteter · om ni har tid och lust', p => p.category === 'activity' && p.status === 'Valfritt'] ];
     for (const [heading, check] of groups) { const group = stops.filter(check); if (group.length) html += `<h4 class="plan-section-title">${heading}</h4>` + group.map(planPlace).join(''); }
     if (!stops.length) html += '<p class="row-meta">Inga extra stopp med de valda filtren den här dagen.</p>';
     html += '</section>';

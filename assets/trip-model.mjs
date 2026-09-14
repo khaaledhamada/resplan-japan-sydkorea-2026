@@ -2,6 +2,7 @@
 export const CATEGORIES = {
   activity: { name: 'Aktiviteter', singular: 'Aktivitet', color: '#1a73e8' },
   food: { name: 'Mat', singular: 'Restaurang', color: '#c4443f' },
+  cafe: { name: 'Kaféer', singular: 'Kafé', color: '#8b5e34' },
   sweet: { name: 'Sötsaker', singular: 'Sötsaker & fika', color: '#8657b0' },
 };
 
@@ -27,14 +28,14 @@ export function validateData(data) {
 }
 
 export function orderedPlaces(places) {
-  const categoryOrder = { activity: 0, food: 1, sweet: 2 };
+  const categoryOrder = { activity: 0, food: 1, cafe: 2, sweet: 3 };
   return [...places].sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999') || a.sequence - b.sequence || categoryOrder[a.category] - categoryOrder[b.category] || a.name.localeCompare(b.name, 'sv'));
 }
 
 export function numberPlaces(places) {
   const counters = {};
   return orderedPlaces(places).map(p => {
-    const prefix = p.category === 'food' ? 'M' : p.category === 'sweet' ? 'S' : p.status === 'Valfritt' ? 'V' : '';
+    const prefix = p.category === 'food' ? 'M' : p.category === 'cafe' ? 'K' : p.category === 'sweet' ? 'S' : p.status === 'Valfritt' ? 'V' : '';
     const key = p.city + ':' + prefix;
     counters[key] = (counters[key] || 0) + 1;
     return { ...p, label: prefix + counters[key] };
@@ -47,6 +48,7 @@ export function groupMapPlaces(places) {
     { id: 'activity', title: 'Aktiviteter', matches: p => p.category === 'activity' && p.status !== 'Valfritt' },
     { id: 'optional', title: 'Valfria aktiviteter', matches: p => p.category === 'activity' && p.status === 'Valfritt' },
     { id: 'food', title: 'Mat', matches: p => p.category === 'food' },
+    { id: 'cafe', title: 'Kaféer', matches: p => p.category === 'cafe' },
     { id: 'sweet', title: 'Sötsaker', matches: p => p.category === 'sweet' },
   ].map(({ id, title, matches }) => ({ id, title, places: ordered.filter(matches) })).filter(group => group.places.length);
 }

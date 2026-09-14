@@ -68,6 +68,19 @@ test('invalid coordinates, duplicate identities and unsafe links are rejected', 
   assert.equal(safeLink('javascript:alert(1)'), null);
   assert.match(navigationUrl(place('x', { name: 'A & B' })), /A%20%26%20B/);
 });
+test('cafes validate, filter, group and number independently from sweets and meals', () => {
+  const data = validateData({ ...base, places: [place('coffee', { category: 'cafe', status: 'Valfritt', date: '' }), place('tea', { category: 'cafe', sequence: 2 }), place('cake', { category: 'sweet' }), place('meal', { category: 'food' })] });
+  const numbered = numberPlaces(data.places);
+  assert.equal(numbered.find(p => p.id === 'tea').label, 'K1');
+  assert.equal(numbered.find(p => p.id === 'coffee').label, 'K2');
+  assert.equal(numbered.find(p => p.id === 'cake').label, 'S1');
+  const initial = initialSelection(data, new URLSearchParams());
+  assert.ok(initial.categories.includes('cafe'));
+  const filtered = filterPlaces(numbered, { ...initial, categories: ['cafe'], optional: false });
+  assert.equal(filtered.length, 2);
+  assert.deepEqual(groupMapPlaces(filtered).map(g => [g.id, g.title]), [['cafe', 'Kaféer']]);
+  assert.equal(filterPlaces(numbered, { ...initial, categories: ['cafe'], query: 'K2' })[0].id, 'coffee');
+});
 test('encrypted datasets authenticate changes and require the correct key', () => {
   const key = randomBytes(32), encrypted = encryptText('private dataset', key);
   assert.equal(decryptText(encrypted, key), 'private dataset');
