@@ -276,6 +276,10 @@ function renderMarkers() {
 function fitMap() {
   if (!map || state.view !== 'map') return;
   map.resize();
+  if ($('map').clientWidth < 160 || $('map').clientHeight < 160) return;
+  // Detail panels set camera padding. Reset it before fitting, especially after
+  // rotating a phone or changing between desktop and mobile layout.
+  map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 });
   const points = matching.length ? matching : places.filter(p => p.city === state.city);
   if (!points.length) return;
   const bounds = new window.maplibregl.LngLatBounds(); points.forEach(p => bounds.extend([p.lon, p.lat]));
