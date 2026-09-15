@@ -1,4 +1,4 @@
-import { CATEGORIES, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260915.1';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260915.2';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -22,7 +22,28 @@ const bytes = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const assetUrl = path => new URL(path, import.meta.url).href;
 const mobile = () => matchMedia('(max-width: 700px), (max-width: 1000px) and (max-height: 500px)').matches;
+const preferencesKey = 'resplan-map-preferences-v1';
+let savedPreferences = {}, preferencesAvailable = true, lastSavedPreferences = '';
 let data, state, map, markers = [], places = [], matching = [], toastTimer, detailOrigin, loadedDetails = false, mapStarting = false;
+
+function readSavedPreferences() {
+  try { return parsePreferences(localStorage.getItem(preferencesKey)); }
+  catch { preferencesAvailable = false; return {}; }
+}
+function savePreferences() {
+  savedPreferences = selectionPreferences(savedPreferences, state);
+  const serialized = JSON.stringify(savedPreferences);
+  try {
+    if (serialized !== lastSavedPreferences) localStorage.setItem(preferencesKey, serialized);
+    lastSavedPreferences = serialized;
+  } catch { preferencesAvailable = false; }
+  if ($('preferences-note')) $('preferences-note').textContent = preferencesAvailable
+    ? 'Dina val sparas i den här webbläsaren.' : 'Valen gäller nu. Webbläsaren tillåter inte att de sparas.';
+}
+function closeFilters() {
+  $('filter-panel').classList.remove('is-open');
+  $('filters-toggle').setAttribute('aria-expanded', 'false');
+}
 
 async function readDataset(descriptor) {
   const response = await fetch(descriptor.url, { cache: 'no-cache', signal: AbortSignal.timeout(20000) });
@@ -47,9 +68,16 @@ function layout() {
         <div class="search-row"><label class="search-field">${icon('search')}<input id="search" type="search" placeholder="Sök bland resans platser" aria-label="Sök platser i vald stad" autocomplete="off"><button class="search-clear" id="clear-search" aria-label="Rensa sökning" hidden>×</button></label><button class="mobile-lock" data-lock aria-label="Lås sidan">${icon('lock')}</button></div>
         <header class="identity"><div><h1>Resekartan</h1><p>${esc(config.subtitle)}</p></div></header>
         <div class="selects"><label class="select-box"><span>Stad</span><select id="city" aria-label="Stad"></select></label><label class="select-box day-filter"><span>Dag</span><select id="day" aria-label="Dag"></select></label></div>
-        <div class="chips" role="group" aria-label="Visa kategorier">${Object.entries(CATEGORIES).map(([key, c]) => `<button class="chip" style="--cat:${c.color}" data-category="${key}" aria-pressed="true"><span class="tick" aria-hidden="true">✓</span>${c.name}</button>`).join('')}</div>
-        <label class="food-filter"><span id="food-filter-label">Matfilter</span><select id="food-type" aria-labelledby="food-filter-label"></select></label>
-        <label class="optional-toggle"><input id="optional" type="checkbox" checked>Visa även valfria aktiviteter (V)</label>
+        <div class="filter-panel" id="filter-panel">
+          <button class="filters-toggle" id="filters-toggle" aria-expanded="false" aria-controls="filter-options">${icon('list')}<span id="filters-summary">Filter</span><span aria-hidden="true">⌄</span></button>
+          <div class="filter-options" id="filter-options">
+            <fieldset class="category-filters"><legend>Visa på kartan</legend><div class="category-options">${Object.entries(CATEGORIES).map(([key, c]) => `<label class="category-option"><input type="checkbox" data-category="${key}" checked><span>${c.name}</span></label>`).join('')}</div></fieldset>
+            <label class="food-filter"><span id="food-filter-label">Matfilter</span><select id="food-type" aria-labelledby="food-filter-label"></select></label>
+            <label class="food-filter cafe-filter"><span id="cafe-filter-label">Kaféfilter</span><select id="cafe-type" aria-labelledby="cafe-filter-label"></select></label>
+            <label class="optional-toggle"><input id="optional" type="checkbox" checked>Visa valfria aktiviteter (V)</label>
+            <p class="preferences-note" id="preferences-note">Dina val sparas i den här webbläsaren.</p>
+          </div>
+        </div>
       </div>
       <section class="places-panel" aria-label="Platslista">
         <div class="list-heading"><div class="list-summary"><h2 id="list-title"></h2><span class="list-count" id="list-count" role="status"></span></div><p>Aktiviteter i nummerordning, sedan valfria stopp.</p><button class="sheet-toggle" id="sheet-toggle" aria-expanded="false" aria-controls="place-list">Visa lista ↑</button></div>
@@ -74,23 +102,35 @@ function layout() {
   updateDays();
   new ResizeObserver(() => $('app').style.setProperty('--controls-height', document.querySelector('.controls').offsetHeight + 'px')).observe(document.querySelector('.controls'));
   $('city').addEventListener('change', () => {
-    state.city = $('city').value; state.day = state.view === 'map' ? '' : daysForCity(data, state.city)[0] || ''; state.query = ''; state.foodType = state.foodType ? 'all' : ''; $('search').value = ''; updateDays(); refresh();
+    state = initialSelection(data, new URLSearchParams({ city: $('city').value, view: state.view }), new Date(), savedPreferences);
+    $('search').value = ''; updateDays(); refresh();
   });
   $('food-type').addEventListener('change', () => {
     state.foodType = $('food-type').value;
-    state.categories = state.foodType ? ['food'] : Object.keys(CATEGORIES);
+    if (!state.categories.includes('food')) state.categories.push('food');
+    refresh();
+  });
+  $('cafe-type').addEventListener('change', () => {
+    state.cafeType = $('cafe-type').value;
+    if (!state.categories.includes('cafe')) state.categories.push('cafe');
     refresh();
   });
   $('day').addEventListener('change', () => { state.day = $('day').value; refresh(); });
   $('search').addEventListener('input', () => { state.query = $('search').value; refresh(); });
   $('clear-search').addEventListener('click', () => { state.query = ''; $('search').value = ''; refresh(); $('search').focus(); });
   $('optional').addEventListener('change', () => { state.optional = $('optional').checked; refresh(); });
-  document.querySelectorAll('[data-category]').forEach(button => button.addEventListener('click', () => {
-    const category = button.dataset.category;
-    state.categories = state.categories.includes(category) ? state.categories.filter(c => c !== category) : [...state.categories, category];
-    if (!state.categories.includes('food')) state.foodType = '';
+  document.querySelectorAll('[data-category]').forEach(input => input.addEventListener('change', () => {
+    const category = input.dataset.category;
+    state.categories = input.checked ? [...new Set([...state.categories, category])] : state.categories.filter(c => c !== category);
     refresh();
   }));
+  $('filters-toggle').addEventListener('click', () => {
+    const open = $('filter-panel').classList.toggle('is-open');
+    $('filters-toggle').setAttribute('aria-expanded', String(open));
+  });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('#filter-panel')) closeFilters();
+  });
   document.querySelectorAll('.nav-button[data-view]').forEach(button => button.addEventListener('click', () => changeView(button.dataset.view)));
   document.querySelectorAll('[data-lock]').forEach(button => button.addEventListener('click', () => {
     try { localStorage.removeItem(config.storageKey); } catch { /* Lock by navigation even if storage is disabled. */ }
@@ -103,14 +143,14 @@ function layout() {
     $('sheet-toggle').textContent = expanded ? 'Visa karta ↓' : 'Visa lista ↑';
     if (!expanded) fitMap();
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeDetail(true); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeFilters(); closeDetail(true); } });
   window.addEventListener('resize', () => requestAnimationFrame(() => {
     map?.resize();
     const selected = places.find(p => p.id === state.selected);
     if (selected) focusPlace(selected, false); else fitMap();
   }));
   window.addEventListener('popstate', () => {
-    const restored = initialSelection(data, new URLSearchParams(location.search));
+    const restored = initialSelection(data, new URLSearchParams(location.search), new Date(), readSavedPreferences());
     closeDetail(false, false);
     $('app').classList.remove('sheet-open');
     $('sheet-toggle').textContent = 'Visa lista ↑'; $('sheet-toggle').setAttribute('aria-expanded', 'false');
@@ -130,9 +170,14 @@ function updateDays() {
 function updateFoodOptions() {
   const count = places.filter(p => p.city === state.city && p.category === 'food').length;
   $('food-filter-label').textContent = 'Matfilter · ' + (state.city === 'seoul' ? 'Sydkorea' : 'Japan');
-  $('food-type').innerHTML = '<option value="">Alla platser</option>' + `<option value="all">Alla matställen (${count})</option>` + foodOptions(places, state.city).map(o => `<option value="${o.id}">${esc(o.label)} (${o.count})</option>`).join('');
+  $('food-type').innerHTML = `<option value="">Alla typer av mat (${count})</option>` + (state.foodType === 'all' ? `<option value="all">Alla typer av mat (${count})</option>` : '') + foodOptions(places, state.city).map(o => `<option value="${o.id}">${esc(o.label)} (${o.count})</option>`).join('');
   $('food-type').value = state.foodType || '';
+  $('food-type').disabled = !state.categories.includes('food');
   document.querySelector('.food-filter').classList.toggle('is-active', Boolean(state.foodType));
+  const cafeCount = places.filter(p => p.city === state.city && p.category === 'cafe').length;
+  $('cafe-type').innerHTML = `<option value="">Alla kaféer (${cafeCount})</option>` + cafeOptions(places, state.city).map(o => `<option value="${o.id}">${esc(o.label)} (${o.count})</option>`).join('');
+  $('cafe-type').value = state.cafeType || '';
+  $('cafe-type').disabled = !state.categories.includes('cafe');
 }
 
 function updateUrl() {
@@ -140,27 +185,32 @@ function updateUrl() {
   url.searchParams.set('city', state.city); url.searchParams.set('view', state.view);
   if (state.view === 'map') url.searchParams.delete('day'); else url.searchParams.set('day', state.day);
   if (state.selected) url.searchParams.set('place', state.selected); else url.searchParams.delete('place');
-  if (state.foodType) url.searchParams.set('food', state.foodType); else url.searchParams.delete('food');
-  if (state.foodType || state.categories.length !== Object.keys(CATEGORIES).length) url.searchParams.set('categories', state.categories.join(',')); else url.searchParams.delete('categories');
+  url.searchParams.set('food', state.foodType);
+  url.searchParams.set('cafe', state.cafeType || '');
+  url.searchParams.set('categories', state.categories.join(','));
+  url.searchParams.set('optional', state.optional ? '1' : '0');
   url.hash = '';
   history.replaceState(null, '', url);
+  savePreferences();
 }
 
 function refresh(clear = true) {
   if (clear) closeDetail();
-  if (state.view === 'map') { state.day = ''; state.optional = true; $('optional').checked = true; }
+  if (state.view === 'map') state.day = '';
+  $('optional').checked = state.optional;
   updateFoodOptions();
   matching = filterPlaces(places, state);
   $('list-title').textContent = data.cities.find(c => c.id === state.city).name;
   $('list-count').textContent = matching.length + (matching.length === 1 ? ' plats' : ' platser') + (state.day ? ' · även alternativ utan fast dag' : '');
   $('clear-search').hidden = !state.query;
   document.querySelectorAll('[data-category]').forEach(b => {
-    const selected = state.categories.includes(b.dataset.category);
-    b.setAttribute('aria-pressed', String(selected)); b.querySelector('.tick').textContent = selected ? '✓' : '';
+    b.checked = state.categories.includes(b.dataset.category);
   });
-  $('place-list').innerHTML = matching.length ? groupMapPlaces(matching).map(group => `<section class="map-place-group" data-group="${group.id}" aria-labelledby="group-${group.id}"><h3 id="group-${group.id}">${group.title}</h3>${group.places.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)}${p.category === 'food' ? ' · ' + esc((p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)).join(' / ')) : ''} · ${esc(p.status === 'Valfritt' ? 'Valfritt' : CATEGORIES[p.category].singular)}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('')}</section>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan sökning eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
+  $('filters-summary').textContent = 'Filter · ' + state.categories.length + ' valda';
+  $('optional').disabled = !state.categories.includes('activity');
+  $('place-list').innerHTML = matching.length ? groupMapPlaces(matching).map(group => `<section class="map-place-group" data-group="${group.id}" aria-labelledby="group-${group.id}"><h3 id="group-${group.id}">${group.title}</h3>${group.places.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)}${p.category === 'food' ? ' · ' + esc((p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)).join(' / ')) : p.category === 'cafe' ? ' · ' + esc((p.cafe_tags || []).map(tag => CAFE_TYPES[tag]).join(' / ')) : ''} · ${esc(p.status === 'Valfritt' ? 'Valfritt' : CATEGORIES[p.category].singular)}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('')}</section>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan sökning eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
   $('place-list').querySelectorAll('[data-place]').forEach(b => b.addEventListener('click', () => selectPlace(b.dataset.place, b)));
-  $('reset-filters')?.addEventListener('click', () => { state.day = ''; state.query = ''; state.foodType = ''; state.categories = Object.keys(CATEGORIES); state.optional = true; $('search').value = ''; $('optional').checked = true; updateDays(); refresh(); });
+  $('reset-filters')?.addEventListener('click', () => { state.day = ''; state.query = ''; state.foodType = ''; state.cafeType = ''; state.categories = Object.keys(CATEGORIES); state.optional = true; $('search').value = ''; $('optional').checked = true; updateDays(); refresh(); });
   renderPlan(); renderMarkers(); fitMap(); updateUrl();
 }
 
@@ -176,7 +226,7 @@ function changeView(view, update = true) {
     if (b.dataset.view === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   if (view === 'map') {
-    state.day = ''; state.optional = true; updateDays();
+    state.day = ''; updateDays();
     if (previous !== view) refresh(false);
     requestAnimationFrame(() => { map?.resize(); fitMap(); }); startMap();
   }
@@ -185,34 +235,73 @@ function changeView(view, update = true) {
 }
 
 function foodBadges(p) {
+  if (p.category === 'cafe') return `<div class="food-badges cafe-badges">${(p.cafe_tags || []).map(tag => `<span>${esc(CAFE_TYPES[tag])}</span>`).join('')}</div>`;
   return p.category === 'food' ? `<div class="food-badges">${(p.food_tags || []).map(tag => `<span>${esc(foodTypeLabel(tag, p.city))}</span>`).join('')}</div>` : '';
 }
 
 function photoGallery(p) {
   const photos = (p.photos || []).filter(photo => safeLink(photo.src)?.startsWith('https:') && safeLink(photo.source));
-  return `<section class="place-photos" aria-label="Bilder på platsen"><div class="photo-strip">${photos.map((photo, i) => `<figure class="place-photo"><a href="${esc(photo.src)}" target="_blank" rel="noopener noreferrer" aria-label="Öppna bild: ${esc(photo.alt)}"><img src="${esc(photo.src)}" alt="${esc(photo.alt)}" decoding="async" referrerpolicy="no-referrer"${i ? ' loading="lazy"' : ''}></a><figcaption>${external(photo.source, esc(photo.credit))}</figcaption></figure>`).join('')}</div><p class="photo-fallback"${photos.length ? ' hidden' : ''}>Bilder visas inte här just nu. ${external(googleMapsUrl(p), 'Se platsens bilder i Google Maps ↗')}</p></section>`;
+  return `<section class="place-photos" aria-label="Bilder på platsen">
+    <div class="photo-heading"><strong>Bilder <span class="photo-total">(${photos.length})</span></strong>${photos.length > 1 ? '<div class="photo-buttons"><button class="photo-prev" aria-label="Föregående bild">‹</button><button class="photo-next" aria-label="Nästa bild">›</button></div>' : ''}</div>
+    <div class="photo-strip" tabindex="0" aria-label="Platsens bilder – svep för fler">${photos.map((photo, i) => `<figure class="place-photo"><a href="${esc(safeLink(photo.original_src) || photo.src)}" target="_blank" rel="noopener noreferrer" aria-label="Öppna stor bild: ${esc(photo.alt)}"><img src="${esc(photo.src)}" alt="${esc(photo.alt)}" width="${Number(photo.width) || 720}" height="${Number(photo.height) || 480}" decoding="async" referrerpolicy="no-referrer" loading="${i ? 'lazy' : 'eager'}" fetchpriority="${i ? 'low' : 'high'}"></a><figcaption>${external(photo.source, esc(photo.credit))}</figcaption></figure>`).join('')}</div>
+    <p class="photo-fallback"${photos.length ? ' hidden' : ''}>Bilder visas inte här just nu. ${external(googleMapsUrl(p), 'Se platsens bilder i Google Maps ↗')}</p>
+  </section>`;
 }
 
-function bindPhotos(p) {
+function recommendation(p) {
+  if (!p.recommendation_sv) return '';
+  const articles = (p.article_sources || []).filter(s => safeLink(s.url));
+  return `<section class="place-recommendation"><h3>Vårt tips</h3><p>${esc(p.recommendation_sv)}</p>${articles.length ? `<div class="article-links">${articles.map(s => external(s.url, esc(s.title) + ' ↗')).join('')}</div>` : ''}</section>`;
+}
+
+function bindPhotos() {
   const gallery = $('place-detail').querySelector('.place-photos');
+  const strip = gallery.querySelector('.photo-strip');
+  const visible = () => [...strip.querySelectorAll('figure')].filter(f => !f.hidden);
+  const currentIndex = () => {
+    const left = strip.getBoundingClientRect().left;
+    const figures = visible();
+    return figures.reduce((best, f, i) => Math.abs(f.getBoundingClientRect().left - left) < Math.abs(figures[best].getBoundingClientRect().left - left) ? i : best, 0);
+  };
+  const update = () => {
+    const figures = visible(), index = currentIndex();
+    gallery.querySelector('.photo-total').textContent = `(${figures.length})`;
+    if (gallery.querySelector('.photo-prev')) {
+      gallery.querySelector('.photo-prev').disabled = index === 0;
+      gallery.querySelector('.photo-next').disabled = index >= figures.length - 1;
+    }
+    gallery.querySelector('.photo-fallback').hidden = figures.length > 0;
+    // Warm just the next small image, rather than fetching every place up front.
+    const next = figures[index + 1]?.querySelector('img');
+    if (next) next.loading = 'eager';
+  };
+  const step = direction => {
+    const figures = visible(), target = figures[Math.max(0, Math.min(figures.length - 1, currentIndex() + direction))];
+    if (target) strip.scrollBy({ left: target.getBoundingClientRect().left - strip.getBoundingClientRect().left, behavior: reduced() ? 'instant' : 'smooth' });
+  };
+  gallery.querySelector('.photo-prev')?.addEventListener('click', () => step(-1));
+  gallery.querySelector('.photo-next')?.addEventListener('click', () => step(1));
+  strip.addEventListener('scroll', update, { passive: true });
+  strip.addEventListener('keydown', event => {
+    if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); step(event.key === 'ArrowRight' ? 1 : -1); }
+  });
   gallery.querySelectorAll('img').forEach(img => {
-    const failed = () => {
-      img.closest('figure').hidden = true;
-      if (![...gallery.querySelectorAll('figure')].some(figure => !figure.hidden)) gallery.querySelector('.photo-fallback').hidden = false;
-    };
+    const failed = () => { img.closest('figure').hidden = true; update(); };
     img.addEventListener('error', failed, { once: true });
     if (img.complete && !img.naturalWidth) failed();
   });
+  requestAnimationFrame(update);
 }
 
 function selectPlace(id, origin) {
   const p = places.find(p => p.id === id); if (!p) return;
+  closeFilters();
   detailOrigin = origin || document.activeElement; state.selected = id;
   if (state.view !== 'map') changeView('map');
   const city = data.cities.find(c => c.id === p.city);
   const sourceLinks = (p.source_urls || []).map(safeLink).filter(Boolean);
-  $('place-detail').innerHTML = `<button class="detail-close" id="close-detail" aria-label="Stäng platsdetaljer">×</button><div class="detail-top">${badge(p)}<div><h2 id="detail-title" tabindex="-1">${esc(p.name)}</h2><p class="detail-meta">${esc(CATEGORIES[p.category].singular)} · ${esc(p.area)}<br>${dayText(p.date)}${p.status === 'Valfritt' ? ' · valfritt alternativ' : p.status === 'Boende' ? ' · ert boende' : ''}</p></div></div>${external(googleMapsUrl(p), icon('map') + 'Öppna Google Maps', 'primary-button')}<p class="detail-footnote">Välj Vägbeskrivning i Google Maps när ni vill ta er hit.</p>${photoGallery(p)}${foodBadges(p)}<p class="detail-description">${esc(p.description_sv)}</p><p class="detail-address">${esc(p.address)}</p><details class="detail-sources"><summary>Platsnotering och källor</summary><p>${esc(p.location_note || 'Kartpunkten visar platsens ungefärliga läge. Kontrollera rätt entré på plats.')}</p>${sourceLinks.map((u, i) => external(u, 'Källa ' + (i + 1))).join('')}<p>${esc(city.name)} · uppgifter från reseplanen. En markering är inte en bokning.</p></details>`;
-  bindPhotos(p);
+  $('place-detail').innerHTML = `<button class="detail-close" id="close-detail" aria-label="Stäng platsdetaljer">×</button><div class="detail-top">${badge(p)}<div><h2 id="detail-title" tabindex="-1">${esc(p.name)}</h2><p class="detail-meta">${esc(CATEGORIES[p.category].singular)} · ${esc(p.area)}<br>${dayText(p.date)}${p.status === 'Valfritt' ? ' · valfritt alternativ' : p.status === 'Boende' ? ' · ert boende' : ''}</p></div></div>${external(googleMapsUrl(p), icon('map') + 'Öppna Google Maps', 'primary-button')}<p class="detail-footnote">Välj Vägbeskrivning i Google Maps när ni vill ta er hit.</p>${photoGallery(p)}${foodBadges(p)}<p class="detail-description">${esc(p.description_sv)}</p>${recommendation(p)}<p class="detail-address">${esc(p.address)}</p><details class="detail-sources"><summary>Platsnotering och källor</summary><p>${esc(p.location_note || 'Kartpunkten visar platsens ungefärliga läge. Kontrollera rätt entré på plats.')}</p>${sourceLinks.map((u, i) => external(u, 'Källa ' + (i + 1))).join('')}<p>${esc(city.name)} · uppgifter från reseplanen. En markering är inte en bokning.</p></details>`;
+  bindPhotos();
   $('place-detail').hidden = false; $('app').classList.add('has-selection'); $('app').classList.remove('sheet-open');
   $('sheet-toggle').textContent = 'Visa lista ↑'; $('sheet-toggle').setAttribute('aria-expanded', 'false');
   $('close-detail').addEventListener('click', () => closeDetail(true));
@@ -376,7 +465,8 @@ async function boot() {
   const sets = await Promise.all(config.datasets.map(readDataset));
   data = validateData({ schema: 1, cities: sets.flatMap(s => s.cities), places: sets.flatMap(s => s.places), updatedAt: sets.map(s => s.updatedAt).sort().at(-1) });
   places = numberPlaces(data.places);
-  state = initialSelection(data, new URLSearchParams(location.search));
+  savedPreferences = readSavedPreferences();
+  state = initialSelection(data, new URLSearchParams(location.search), new Date(), savedPreferences);
   layout(); refresh(false); changeView(state.view);
   const selected = state.selected;
   if (selected && matching.some(p => p.id === selected)) selectPlace(selected);

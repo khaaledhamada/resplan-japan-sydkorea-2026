@@ -6,6 +6,11 @@ export const CATEGORIES = {
   sweet: { name: 'Sötsaker', singular: 'Sötsaker & fika', color: '#8657b0' },
 };
 
+export const CAFE_TYPES = { matcha: 'Matcha', tea: 'Te', coffee: 'Kaffe', bakery: 'Bagerikafé' };
+export function cafeOptions(places, city) {
+  return Object.entries(CAFE_TYPES).map(([id, label]) => ({id, label, count: places.filter(p => p.city === city && p.category === 'cafe' && p.cafe_tags?.includes(id)).length})).filter(o => o.count);
+}
+
 export const FOOD_TYPES = {
   sushi: 'Sushi', ramen: 'Ramen', meat: 'Kött', bbq: 'Grillat / yakiniku',
   noodles: 'Soba & andra nudlar', dumplings: 'Gyoza', streetfood: 'Gatumat',
@@ -42,8 +47,11 @@ export function validateData(data) {
         typeof p.name !== 'string' || !p.name.trim() || !Number.isFinite(p.sequence) ||
         typeof p.date !== 'string' || (p.date && !validDay(p.date)) ||
         typeof p.description_sv !== 'string' || typeof p.address !== 'string' ||
+        (p.recommendation_sv !== undefined && typeof p.recommendation_sv !== 'string') ||
+        (p.article_sources !== undefined && (!Array.isArray(p.article_sources) || p.article_sources.some(s => !s || typeof s.title !== 'string' || !s.title.trim() || !safeLink(s.url)?.startsWith('https:')))) ||
+        (p.cafe_tags !== undefined && (!Array.isArray(p.cafe_tags) || p.category !== 'cafe' || !p.cafe_tags.length || new Set(p.cafe_tags).size !== p.cafe_tags.length || p.cafe_tags.some(tag => !Object.hasOwn(CAFE_TYPES, tag)))) ||
         (p.food_tags !== undefined && (!Array.isArray(p.food_tags) || p.category !== 'food' || !p.food_tags.length || new Set(p.food_tags).size !== p.food_tags.length || p.food_tags.some(tag => !Object.hasOwn(FOOD_TYPES, tag)))) ||
-        (p.photos !== undefined && (!Array.isArray(p.photos) || p.photos.some(photo => !photo || !safeLink(photo.src)?.startsWith('https:') || !safeLink(photo.source) || typeof photo.alt !== 'string' || typeof photo.credit !== 'string')))) throw Error('Ogiltig plats: ' + p.id);
+        (p.photos !== undefined && (!Array.isArray(p.photos) || p.photos.some(photo => !photo || !safeLink(photo.src)?.startsWith('https:') || !safeLink(photo.source) || typeof photo.alt !== 'string' || typeof photo.credit !== 'string' || (photo.original_src !== undefined && !safeLink(photo.original_src)?.startsWith('https:')) || ['width', 'height'].some(key => photo[key] !== undefined && (!Number.isInteger(photo[key]) || photo[key] < 1 || photo[key] > 10000)))))) throw Error('Ogiltig plats: ' + p.id);
     ids.add(p.id);
   }
   return data;
@@ -85,7 +93,8 @@ export function filterPlaces(places, state) {
   return places.filter(p => p.city === state.city && (!state.day || !p.date || p.date === state.day) &&
     state.categories.includes(p.category) && (state.optional || p.category !== 'activity' || p.status !== 'Valfritt') &&
     (p.category !== 'food' || !state.foodType || state.foodType === 'all' || p.food_tags?.includes(state.foodType)) &&
-    (!query || fold([p.name, p.area, p.address, p.description_sv, p.label, ...(p.food_tags || []).map(tag => foodTypeLabel(tag, p.city))].join(' ')).includes(query)));
+    (p.category !== 'cafe' || !state.cafeType || p.cafe_tags?.includes(state.cafeType)) &&
+    (!query || fold([p.name, p.area, p.address, p.description_sv, p.label, ...(p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)), ...(p.cafe_tags || []).map(tag => CAFE_TYPES[tag])].join(' ')).includes(query)));
 }
 
 export function daysForCity(data, city) {
@@ -98,22 +107,53 @@ export function dayText(day, weekday = false) {
   return new Intl.DateTimeFormat('sv-SE', { day: 'numeric', month: 'long', ...(weekday ? { weekday: 'long' } : {}), timeZone: 'UTC' }).format(new Date(day + 'T12:00:00Z'));
 }
 
-export function initialSelection(data, params, now = new Date()) {
+export function parsePreferences(value) {
+  try {
+    const p = typeof value === 'string' ? JSON.parse(value) : value;
+    if (!p || p.version !== 1) return {};
+    const categories = Array.isArray(p.categories) && p.categories.every(c => Object.hasOwn(CATEGORIES, c)) ? [...new Set(p.categories)] : undefined;
+    const cityFilters = Object.fromEntries(Object.entries(p.cityFilters || {}).filter(([id, f]) => /^[a-z][a-z0-9-]*$/.test(id) && f && typeof f === 'object').map(([id, f]) => [id, {
+      foodType: typeof f.foodType === 'string' ? f.foodType : '', cafeType: typeof f.cafeType === 'string' ? f.cafeType : '', day: typeof f.day === 'string' ? f.day : undefined,
+    }]));
+    return { version: 1, city: typeof p.city === 'string' ? p.city : undefined, view: ['map', 'plan', 'details'].includes(p.view) ? p.view : undefined, categories, optional: typeof p.optional === 'boolean' ? p.optional : undefined, cityFilters };
+  } catch { return {}; }
+}
+
+export function selectionPreferences(previous, state) {
+  const saved = parsePreferences(previous);
+  return { version: 1, city: state.city, view: state.view, categories: [...state.categories], optional: state.optional,
+    cityFilters: { ...saved.cityFilters, [state.city]: { foodType: state.foodType, cafeType: state.cafeType || '', day: state.view === 'plan' ? state.day : saved.cityFilters?.[state.city]?.day } } };
+}
+
+export function initialSelection(data, params, now = new Date(), preferences = {}) {
+  const saved = parsePreferences(preferences);
   // Stable place links keep working when an excursion moves to another city.
   const linkedPlace = data.places.find(p => p.id === params.get('place'));
   let city = data.cities.find(c => c.id === (linkedPlace?.city || params.get('city')));
+  if (!city) city = data.cities.find(c => c.id === saved.city);
   const localDay = c => new Intl.DateTimeFormat('sv-SE', { timeZone: c.id === 'seoul' ? 'Asia/Seoul' : 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
   // Fuji is a Tokyo day trip; select its dedicated map on the excursion day.
   if (!city) city = [...data.cities].reverse().find(c => daysForCity(data, c.id).includes(localDay(c))) || data.cities[0];
+  const cityFilter = saved.cityFilters?.[city.id] || {};
   const days = daysForCity(data, city.id), requestedDay = params.get('day');
-  const view = ['map', 'plan', 'details'].includes(params.get('view')) ? params.get('view') : 'map';
+  const view = ['map', 'plan', 'details'].includes(params.get('view')) ? params.get('view') : params.has('view') || linkedPlace ? 'map' : saved.view || 'map';
   // The city map always includes every day, including links made before that change.
-  const day = view === 'map' ? '' : params.has('day') ? (days.includes(requestedDay) ? requestedDay : '') : (days.includes(localDay(city)) ? localDay(city) : days[0] || '');
-  const requestedFood = params.get('food');
-  const foodType = requestedFood === 'all' || foodOptions(data.places, city.id).some(o => o.id === requestedFood) ? requestedFood : '';
+  const day = view === 'map' ? '' : params.has('day') ? (days.includes(requestedDay) ? requestedDay : '') : cityFilter.day === '' || days.includes(cityFilter.day) ? cityFilter.day : (days.includes(localDay(city)) ? localDay(city) : days[0] || '');
+  const requestedFood = params.has('food') ? params.get('food') : cityFilter.foodType;
+  let foodType = requestedFood === 'all' || foodOptions(data.places, city.id).some(o => o.id === requestedFood) ? requestedFood : '';
+  const requestedCafe = params.has('cafe') ? params.get('cafe') : cityFilter.cafeType;
+  let cafeType = cafeOptions(data.places, city.id).some(o => o.id === requestedCafe) ? requestedCafe : '';
   const requestedCategories = params.has('categories') ? params.get('categories').split(',').filter(c => Object.hasOwn(CATEGORIES, c)) : null;
-  const categories = requestedCategories || (foodType ? ['food'] : Object.keys(CATEGORIES));
-  return { city: city.id, day, query: '', categories, foodType: categories.includes('food') ? foodType : '', optional: true, view, selected: params.get('place') || null };
+  const categories = requestedCategories || (params.has('food') && foodType ? ['food'] : params.has('cafe') && cafeType ? ['cafe'] : saved.categories || Object.keys(CATEGORIES));
+  let optional = params.has('optional') ? params.get('optional') !== '0' : saved.optional ?? true;
+  // Opening a shared place link must not silently hide that place behind saved filters.
+  if (linkedPlace) {
+    if (!params.has('categories') && !categories.includes(linkedPlace.category)) categories.push(linkedPlace.category);
+    if (!params.has('optional') && linkedPlace.status === 'Valfritt') optional = true;
+    if (!params.has('cafe') && linkedPlace.category === 'cafe' && !linkedPlace.cafe_tags?.includes(cafeType)) cafeType = '';
+    if (!params.has('food') && linkedPlace.category === 'food' && !linkedPlace.food_tags?.includes(foodType)) foodType = '';
+  }
+  return { city: city.id, day, query: '', categories, foodType, cafeType, optional, view, selected: params.get('place') || null };
 }
 
 export function googleMapsUrl(p) {

@@ -125,3 +125,56 @@
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 @media print{.app,.app[data-view=details]{display:block;height:auto;overflow:visible}.rail,.sidebar,.map-view,.toast{display:none!important}.workspace,.plan-view,.details-view{position:static;height:auto;overflow:visible}.plan-view{display:block!important;padding:0}.plan-place{break-inside:avoid}.plan-place .actions{display:none}.plan-day{break-inside:auto}.plan-day-title h3{break-after:avoid}}
+
+/* Explicit checkbox filters; a compact popover keeps the phone map clear. */
+.controls{position:relative}
+.filter-panel{min-width:0;position:relative}
+.filters-toggle{display:flex;align-items:center;justify-content:center;gap:8px;min-height:40px;width:100%;padding:6px 12px;margin:13px 0 16px;background:white;border:1px solid var(--line);border-radius:24px;font-size:13px;font-weight:600}
+.filters-toggle .icon{width:18px;height:18px}
+.filters-toggle[aria-expanded=true]{outline:2px solid var(--blue);outline-offset:1px}
+.filter-options{display:none;position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:15;padding:14px 16px 10px;border:1px solid var(--line);border-radius:16px;background:white;box-shadow:0 8px 24px #18314f30;max-height:min(60dvh,340px);overflow:auto;overscroll-behavior:contain}
+.filter-panel.is-open .filter-options{display:block}
+.category-filters{border:0;padding:0;margin:0;min-width:0}
+.category-filters legend{font-size:12px;font-weight:650;margin-bottom:5px}
+.category-options{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px}
+.category-option{display:flex;align-items:center;gap:9px;min-height:44px;font-size:14px;color:var(--ink);cursor:pointer;border-radius:8px}
+.category-option input,.filter-options .optional-toggle input{appearance:auto;accent-color:var(--blue);width:19px;height:19px;flex:none;margin:0;cursor:pointer}
+.category-option:has(input:focus-visible){outline:2px solid #78abef;outline-offset:2px}
+.filter-options .food-filter{margin:10px 0 4px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:none}
+.filter-options .food-filter.is-active{border-color:#a7b8d0;background:#fff}
+.filter-options .food-filter.is-active>span{color:var(--muted)}
+.filter-options .food-filter:has(select:disabled){opacity:.5}
+.app[data-view=map] .filter-options .optional-toggle,.filter-options .optional-toggle{display:flex;min-height:42px;margin:2px 0;font-size:13px;color:var(--ink)}
+.filter-options .optional-toggle:has(input:disabled){opacity:.5}
+.preferences-note{font-size:11px;line-height:1.5;color:var(--muted);margin:2px 0 15px}
+@media(max-width:700px),(max-width:1000px) and (max-height:500px){
+  .controls{position:relative}
+  .filter-panel{grid-column:2;min-width:0;position:static}
+  .filters-toggle{margin:0}
+  .filters-toggle{display:flex;align-items:center;justify-content:center;gap:8px;min-height:38px;width:100%;padding:6px 12px;background:white;border:1px solid var(--line);border-radius:24px;font-size:13px;font-weight:600;box-shadow:0 2px 8px #21365118}
+  .filters-toggle .icon{width:18px;height:18px}
+  .filters-toggle[aria-expanded=true]{outline:2px solid var(--blue);outline-offset:1px}
+  .filter-options{display:none;position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:15;padding:14px 16px 10px;border:1px solid var(--line);border-radius:16px;background:white;box-shadow:0 8px 24px #18314f30;max-height:min(60dvh,340px);overflow:auto;overscroll-behavior:contain;pointer-events:auto}
+  .filter-panel.is-open .filter-options{display:block}
+  .category-filters{margin:0}
+  .category-option{min-height:44px}
+  .preferences-note{margin-bottom:3px}
+  .app[data-view=map] .controls{grid-template-columns:110px minmax(0,1fr)}
+  .app[data-view=map] .filter-options .food-filter{border:1px solid var(--line);border-radius:10px;padding:6px 9px;min-height:42px;box-shadow:none;margin:8px 0 3px}
+  .app[data-view=map] .place-detail{max-height:min(65dvh,calc(100dvh - var(--controls-height,92px) - 135px))}
+  .app:not([data-view=map]) .filter-options{left:10px;right:10px}
+}
+.photo-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+.photo-total{font-weight:400;color:var(--muted)}
+.photo-buttons{display:flex;gap:5px}
+.photo-buttons button{display:grid;place-items:center;min-width:36px;min-height:36px;border:1px solid var(--line);border-radius:50%;font-size:23px;line-height:1;background:white}
+.photo-buttons button:disabled{cursor:default;opacity:.35}
+.photo-strip{scrollbar-width:thin}
+.place-photo img{height:180px;aspect-ratio:3/2;background:linear-gradient(110deg,#edf1f5,#f7f9fb)}
+@media(max-width:700px){.place-photo img{height:170px}.photo-buttons button{min-height:40px;min-width:40px}}
+@media(max-width:700px),(max-width:1000px) and (max-height:500px){
+  .app[data-view=map] .controls:has(.filter-panel.is-open){z-index:13}
+}
+.cafe-badges span{color:#236344;background:#edf6ee}
+
+.place-recommendation{margin:14px 0;padding:14px;background:#f5f7f5;border:1px solid #e1e7e2;border-radius:12px}.place-recommendation h3{font-size:14px;margin:0 0 6px}.place-recommendation p{font-size:14px;line-height:1.55;margin:0}.article-links{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px}.article-links a{font-size:13px;color:#245d45;text-underline-offset:3px}

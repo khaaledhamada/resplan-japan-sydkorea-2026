@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { numberPlaces, groupMapPlaces, filterPlaces, initialSelection, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink } from '../assets/trip-model.mjs';
+import { numberPlaces, groupMapPlaces, filterPlaces, initialSelection, parsePreferences, selectionPreferences, cafeOptions, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink } from '../assets/trip-model.mjs';
 import { encryptText, decryptText } from '../scripts/crypto.mjs';
 import { randomBytes } from 'node:crypto';
 const place = (id, extra = {}) => ({ id, city: 'tokyo', name: 'Plats ' + id, category: 'activity', date: '2026-10-08', sequence: 1, lat: 35.6, lon: 139.7, description_sv: 'Promenad', address: 'Tokyo, Japan', status: 'Planerat', ...extra });
@@ -179,7 +179,7 @@ test('shared filter URLs restore valid food types and categories without leaking
   const withActivities = selection('city=tokyo&food=ramen&categories=activity,food,unknown,__proto__');
   assert.deepEqual(withActivities.categories, ['activity', 'food']);
   assert.equal(withActivities.foodType, 'ramen');
-  assert.equal(selection('city=tokyo&food=ramen&categories=activity').foodType, '');
+  assert.equal(selection('city=tokyo&food=ramen&categories=activity').foodType, 'ramen');
   assert.deepEqual(selection('city=tokyo&categories=').categories, []);
   assert.equal(selection('city=seoul&food=ramen').foodType, '');
   assert.deepEqual(selection('city=seoul&food=ramen').categories, ['activity', 'food', 'cafe', 'sweet']);
@@ -216,4 +216,80 @@ test('encrypted datasets authenticate changes and require the correct key', () =
   assert.equal(decryptText(encrypted, key), 'private dataset');
   assert.throws(() => decryptText(encrypted, randomBytes(32)));
   assert.notEqual(encryptText('private dataset', key).iv, encrypted.iv);
+});
+
+test('saved choices survive reopening, including no categories and hidden optional activities', () => {
+  const data = {...base, places:[place('walk'),place('extra',{status:'Valfritt'})]};
+  const state = {...initialSelection(data,new URLSearchParams()), categories:[], optional:false, query:'temporary search', selected:'walk'};
+  const saved = parsePreferences(JSON.stringify(selectionPreferences({},state)));
+  const restored = initialSelection(data,new URLSearchParams(),new Date(),saved);
+  assert.deepEqual(restored.categories,[]);
+  assert.equal(restored.optional,false);
+  assert.equal(restored.query,'');
+  assert.equal(restored.selected,null);
+  assert.deepEqual(filterPlaces(data.places,restored),[]);
+  assert.equal(initialSelection(data,new URLSearchParams('categories=activity&optional=1'),new Date(),saved).optional,true);
+  assert.deepEqual(initialSelection(data,new URLSearchParams('categories=activity'),new Date(),saved).categories,['activity']);
+});
+test('food and plan-day preferences stay with their city across both sites', () => {
+  const data={...base,cities:[...base.cities,{id:'seoul',name:'Seoul'},{id:'kyoto',name:'Kyoto'}],places:[
+    place('ramen',{category:'food',food_tags:['ramen']}),place('bbq',{city:'seoul',category:'food',food_tags:['bbq']}),place('kyoto-walk',{city:'kyoto'})]};
+  let tokyo={...initialSelection(data,new URLSearchParams('city=tokyo')),categories:['activity','food','cafe'],foodType:'ramen',view:'plan',day:'2026-10-08'};
+  let saved=selectionPreferences({},tokyo);
+  let seoul=initialSelection(data,new URLSearchParams('city=seoul'),new Date(),saved);
+  assert.equal(seoul.foodType,'');
+  saved=selectionPreferences(saved,{...seoul,foodType:'bbq'});
+  const back=initialSelection(data,new URLSearchParams('city=tokyo'),new Date(),saved);
+  assert.equal(back.foodType,'ramen');assert.equal(back.day,'2026-10-08');
+  assert.deepEqual(back.categories,['activity','food','cafe']);
+  saved=selectionPreferences(saved,{...back,categories:['activity']});
+  assert.equal(initialSelection(data,new URLSearchParams('city=tokyo'),new Date(),saved).foodType,'ramen');
+  saved=selectionPreferences(saved,{...back,city:'kyoto'});
+  const short={...data,cities:data.cities.filter(c=>c.id!=='kyoto'),places:data.places.filter(p=>p.city!=='kyoto')};
+  assert.notEqual(initialSelection(short,new URLSearchParams(),new Date('2026-09-15'),saved).city,'kyoto');
+});
+test('malformed or outdated saved choices are ignored, and place links remain visible', () => {
+  const data={...base,places:[place('walk'),place('optional',{status:'Valfritt'})]};
+  for(const raw of ['{','null','[]','{"version":99}','{"version":1,"categories":["constructor"]}']) {
+    const state=initialSelection(data,new URLSearchParams(),new Date(),parsePreferences(raw));
+    assert.deepEqual(state.categories,['activity','food','cafe','sweet']);
+  }
+  const saved=selectionPreferences({}, {...initialSelection(data,new URLSearchParams()),categories:['food'],optional:false});
+  const linked=initialSelection(data,new URLSearchParams('place=optional'),new Date(),saved);
+  assert.equal(linked.view,'map');
+  assert(filterPlaces(data.places,linked).some(p=>p.id==='optional'));
+  assert.equal(initialSelection(data,new URLSearchParams('place=optional&optional=0'),new Date(),saved).optional,false);
+});
+
+test('matcha filters cafes while preserving selected restaurants and activities', () => {
+  const data={...base,places:[place('walk'),place('lunch',{category:'food',food_tags:['sushi']}),
+    place('tea',{category:'cafe',cafe_tags:['matcha','tea']}),place('coffee',{category:'cafe',cafe_tags:['coffee']}),
+    place('dessert',{category:'sweet',name:'Matchaglass'}),place('seoul-tea',{city:'seoul',category:'cafe',cafe_tags:['tea']})]};
+  const state={...initialSelection(data,new URLSearchParams('city=tokyo')),cafeType:'matcha'};
+  assert.deepEqual(filterPlaces(data.places,state).map(p=>p.id),['walk','lunch','tea','dessert']);
+  assert.deepEqual(cafeOptions(data.places,'tokyo').map(o=>[o.id,o.count]),[['matcha',1],['tea',1],['coffee',1]]);
+  assert.deepEqual(filterPlaces(data.places,{...state,categories:['cafe']}).map(p=>p.id),['tea']);
+});
+test('cafe preferences survive city changes and an unchecked cafe category', () => {
+  const data={...base,cities:[...base.cities,{id:'seoul',name:'Seoul'}],places:[
+    place('tea',{category:'cafe',cafe_tags:['matcha']}),place('coffee',{city:'seoul',category:'cafe',cafe_tags:['coffee']})]};
+  const tokyo={...initialSelection(data,new URLSearchParams('city=tokyo&cafe=matcha')),categories:['activity']};
+  let saved=selectionPreferences({},tokyo);
+  let seoul=initialSelection(data,new URLSearchParams('city=seoul'),new Date(),saved);
+  assert.equal(seoul.cafeType,'');
+  saved=selectionPreferences(saved,{...seoul,cafeType:'coffee'});
+  const restored=initialSelection(data,new URLSearchParams('city=tokyo'),new Date(),saved);
+  assert.equal(restored.cafeType,'matcha');assert.deepEqual(restored.categories,['activity']);
+  const linked=initialSelection(data,new URLSearchParams('place=tea'),new Date(),saved);
+  assert.ok(filterPlaces(data.places,linked).some(p=>p.id==='tea'));
+  assert.equal(initialSelection(data,new URLSearchParams('city=tokyo&cafe=coffee'),new Date(),saved).cafeType,'');
+});
+test('cafe and reading metadata reject invalid tags and unsafe external links', () => {
+  const cafe=place('tea',{category:'cafe',cafe_tags:['matcha'],article_sources:[{title:'Besöksartikel',url:'https://example.com/review'}]});
+  assert.doesNotThrow(()=>validateData({...base,places:[cafe]}));
+  for(const patch of [{cafe_tags:[]},{cafe_tags:['matcha','matcha']},{cafe_tags:['unknown']},{category:'food'},
+    {article_sources:[{title:'Läs',url:'javascript:alert(1)'}]},{article_sources:[{url:'https://example.com'}]},
+    {photos:[{src:'https://example.com/preview.svg',source:'https://example.com',alt:'Te',credit:'Kaféet',original_src:'javascript:alert(1)'}]}]) {
+    assert.throws(()=>validateData({...base,places:[{...cafe,...patch}]}),/Ogiltig plats/);
+  }
 });
