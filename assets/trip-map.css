@@ -181,3 +181,23 @@
 .cafe-badges span{color:#236344;background:#edf6ee}
 
 .place-recommendation{margin:14px 0;padding:14px;background:#f5f7f5;border:1px solid #e1e7e2;border-radius:12px}.place-recommendation h3{font-size:14px;margin:0 0 6px}.place-recommendation p{font-size:14px;line-height:1.55;margin:0}.article-links{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px}.article-links a{font-size:13px;color:#245d45;text-underline-offset:3px}
+
+/* Boenden får ett tydligt rött hus, inspirerat av en spelpjäs, i stället
+   för att blandas ihop med vanliga aktivitetsnummer. */
+.number.lodging{background:#c62828;color:#fff;border-radius:10px;display:flex;flex-direction:column;gap:1px;line-height:1}
+.lodging-icon{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.lodging-label{font-size:10px;font-weight:800;letter-spacing:-.2px}
+.pin.lodging{width:50px;height:53px}
+.pin.lodging .pin-house{position:absolute;left:50%;bottom:4px;width:44px;height:44px;transform:translateX(-50%);filter:drop-shadow(0 2px 2px #14253b50);overflow:visible}
+.pin-house-fill{fill:#c62828;stroke:#fff;stroke-width:1.8;stroke-linejoin:round}
+.pin-house-door{fill:#fff}
+.pin-house text{font:800 8px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#fff}
+.pin.lodging[aria-pressed=true] .pin-house{width:50px;height:50px}
+@media(max-width:700px),(max-width:1000px) and (max-height:500px){
+  .number.lodging{width:38px;height:38px}
+  .number.lodging .lodging-icon{width:19px;height:19px}
+  .lodging-label{font-size:9px}
+  .pin.lodging{width:46px;height:50px}
+  .pin.lodging .pin-house{width:40px;height:40px}
+  .pin.lodging[aria-pressed=true] .pin-house{width:46px;height:46px}
+}

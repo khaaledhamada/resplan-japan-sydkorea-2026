@@ -16,7 +16,12 @@ const icons = {
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.pin}</svg>`;
 const catStyle = p => `--cat:${CATEGORIES[p.category].color}`;
 const isOptionalActivity = p => p.category === 'activity' && p.status === 'Valfritt';
-const badge = p => `<span class="number${isOptionalActivity(p) ? ' optional' : ''}${p.label.length > 4 ? ' long-number' : ''}" style="${catStyle(p)}">${esc(p.label)}</span>`;
+const isLodging = p => p.status === 'Boende';
+const lodgingIcon = '<svg class="lodging-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 10 12 2l10 8v11H2Z"/><path d="M9 21v-7h6v7Z"/></svg>';
+const lodgingMarker = label => `<svg class="pin-house" viewBox="0 0 44 44" aria-hidden="true"><path class="pin-house-fill" d="M3 18 22 3l19 15v23H3Z"/><path class="pin-house-door" d="M17 41V27h10v14Z"/><text x="22" y="23" text-anchor="middle">${esc(label)}</text></svg>`;
+const badge = p => isLodging(p)
+  ? `<span class="number lodging" title="Boende" style="${catStyle(p)}">${lodgingIcon}<span class="lodging-label">${esc(p.label)}</span></span>`
+  : `<span class="number${isOptionalActivity(p) ? ' optional' : ''}${p.label.length > 4 ? ' long-number' : ''}" style="${catStyle(p)}">${esc(p.label)}</span>`;
 const external = (url, label, cls = '') => `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 const bytes = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -88,7 +93,7 @@ function layout() {
       <section class="map-view" id="map-view" aria-label="Interaktiv resekarta">
         <div class="map-canvas" id="map" aria-label="Karta över resans platser"></div>
         <div class="map-tools"><button class="floating-button" id="fit-map">${icon('list')}Visa alla</button></div>
-        <div class="map-help">3.1 = 3 okt, aktivitet 1 · V = valfritt<br>M = mat · K = kaféer · S = sött</div>
+        <div class="map-help">3.1 = 3 okt, aktivitet 1 · V = valfritt<br>M = mat · K = kaféer · S = sött · rött hus = boende</div>
         <div class="map-status" id="map-status" role="status" hidden></div>
         <section class="place-detail" id="place-detail" aria-label="Platsdetaljer" hidden></section>
       </section>
@@ -435,10 +440,10 @@ function renderMarkers() {
   markers.forEach(m => m.remove()); markers = [];
   for (const p of matching) {
     const button = document.createElement('button');
-    button.className = 'pin' + (isOptionalActivity(p) ? ' optional' : '') + (p.label.length > 4 ? ' long-label' : '');
+    button.className = 'pin' + (isOptionalActivity(p) ? ' optional' : '') + (isLodging(p) ? ' lodging' : '') + (p.label.length > 4 ? ' long-label' : '');
     button.style.setProperty('--cat', CATEGORIES[p.category].color);
     button.dataset.place = p.id; button.setAttribute('aria-label', p.label + '. ' + p.name); button.setAttribute('aria-pressed', String(state.selected === p.id));
-    button.innerHTML = `<span class="pin-shape"><span class="pin-label">${esc(p.label)}</span></span>`;
+    button.innerHTML = isLodging(p) ? lodgingMarker(p.label) : `<span class="pin-shape"><span class="pin-label">${esc(p.label)}</span></span>`;
     button.addEventListener('click', event => { event.stopPropagation(); selectPlace(p.id, button); });
     markers.push(new window.maplibregl.Marker({ element: button, anchor: 'bottom' }).setLngLat([p.lon, p.lat]).addTo(map));
   }
