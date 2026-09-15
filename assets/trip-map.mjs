@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260915.2';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.1';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -71,7 +71,7 @@ function layout() {
         <div class="filter-panel" id="filter-panel">
           <button class="filters-toggle" id="filters-toggle" aria-expanded="false" aria-controls="filter-options">${icon('list')}<span id="filters-summary">Filter</span><span aria-hidden="true">⌄</span></button>
           <div class="filter-options" id="filter-options">
-            <fieldset class="category-filters"><legend>Visa på kartan</legend><div class="category-options">${Object.entries(CATEGORIES).map(([key, c]) => `<label class="category-option"><input type="checkbox" data-category="${key}" checked><span>${c.name}</span></label>`).join('')}</div></fieldset>
+            <fieldset class="category-filters"><legend>Visa på kartan</legend><p class="filter-hint">Bocka i det ni vill se · dubbeltryck på en kategori för alla</p><div class="category-options">${Object.entries(CATEGORIES).map(([key, c]) => `<label class="category-option" data-category-option="${key}"><input type="checkbox" data-category="${key}" checked><span>${c.name}</span></label>`).join('')}</div></fieldset>
             <label class="food-filter"><span id="food-filter-label">Matfilter</span><select id="food-type" aria-labelledby="food-filter-label"></select></label>
             <label class="food-filter cafe-filter"><span id="cafe-filter-label">Kaféfilter</span><select id="cafe-type" aria-labelledby="cafe-filter-label"></select></label>
             <label class="optional-toggle"><input id="optional" type="checkbox" checked>Visa valfria aktiviteter (V)</label>
@@ -122,6 +122,15 @@ function layout() {
   document.querySelectorAll('[data-category]').forEach(input => input.addEventListener('change', () => {
     const category = input.dataset.category;
     state.categories = input.checked ? [...new Set([...state.categories, category])] : state.categories.filter(c => c !== category);
+    refresh();
+  }));
+  document.querySelectorAll('[data-category-option]').forEach(option => option.addEventListener('dblclick', event => {
+    event.preventDefault();
+    // A double tap is a quick, discoverable "show everything" action. Clear
+    // the food/café subfilters too, otherwise the category boxes would all be
+    // checked while a hidden type filter still narrowed the map.
+    state.categories = Object.keys(CATEGORIES);
+    state.foodType = ''; state.cafeType = ''; state.optional = true;
     refresh();
   }));
   $('filters-toggle').addEventListener('click', () => {
@@ -183,6 +192,7 @@ function updateFoodOptions() {
 function updateUrl() {
   const url = new URL(location.href);
   url.searchParams.set('city', state.city); url.searchParams.set('view', state.view);
+  if (state.autoCity) url.searchParams.set('autocity', '1'); else url.searchParams.delete('autocity');
   if (state.view === 'map') url.searchParams.delete('day'); else url.searchParams.set('day', state.day);
   if (state.selected) url.searchParams.set('place', state.selected); else url.searchParams.delete('place');
   url.searchParams.set('food', state.foodType);
@@ -307,7 +317,9 @@ function selectPlace(id, origin) {
   $('close-detail').addEventListener('click', () => closeDetail(true));
   document.querySelectorAll('[data-place]').forEach(e => e.setAttribute('aria-pressed', String(e.dataset.place === id)));
   requestAnimationFrame(() => {
-    focusPlace(p);
+    // Keep the current zoom when opening a marker; only pan enough to keep
+    // the detail card and the selected pin visible.
+    focusPlace(p, false);
     $('detail-title').focus({ preventScroll: true });
   });
   updateUrl();
@@ -321,30 +333,36 @@ function closeDetail(restore = false, update = true) {
     const origin = detailOrigin?.isConnected && detailOrigin.getClientRects().length ? detailOrigin : mobile() ? $('sheet-toggle') : $('fit-map');
     origin.focus({ preventScroll: true });
   }
-  if (restore) fitMap();
+  if (restore && map) {
+    // Remove the detail-card padding without fitting bounds. Closing a card
+    // should leave the map exactly at the user's zoom level and area.
+    map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 });
+    map.resize();
+  }
   if (update) updateUrl();
 }
 
 function renderPlan() {
   const city = data.cities.find(c => c.id === state.city);
   const days = state.day ? [state.day] : daysForCity(data, state.city);
+  const planned = planPlaces(places, state);
   function planPlace(p) {
     return `<article class="plan-place" data-plan-place="${esc(p.id)}">${badge(p)}<div><h4>${esc(p.name)}</h4><p>${esc(p.description_sv)}</p><div class="actions"><button data-show-place="${esc(p.id)}">Visa på kartan</button>${external(googleMapsUrl(p), 'Google Maps ↗')}</div></div></article>`;
   }
-  let html = `<header class="plan-header"><span class="eyebrow">Samma platser som på kartan</span><h2>${esc(city.name)}${state.day ? ' · ' + dayText(state.day) : ''}</h2><p>Följ de blå aktivitetsnumren i ordning. Mat och sötsaker är förslag att välja bland, inte en lista där allt måste hinnas med. <strong>3.1</strong> betyder 3 oktober, aktivitet 1. <strong>3.V1</strong> är ett valfritt stopp den dagen; <strong>V1</strong> saknar fast datum. Bokade tider i era biljetter gäller alltid.</p></header>`;
+  let html = `<header class="plan-header"><span class="eyebrow">Aktiviteter i reseordning</span><h2>${esc(city.name)}${state.day ? ' · ' + dayText(state.day) : ''}</h2><p>Här visas bara planeringen och aktiviteterna – mat, kaféer och sötsaker hittar ni under Karta. <strong>3.1</strong> betyder 3 oktober, aktivitet 1. <strong>3.V1</strong> är ett valfritt stopp den dagen; <strong>V1</strong> saknar fast datum. Bokade tider i era biljetter gäller alltid.</p></header>`;
   if (city.intro) html += `<div class="notice">${esc(city.intro)}</div>`;
-  if (!matching.length && !days.some(d => city.notes?.[d])) html += '<p class="empty-state">Inga platser matchar filtren. Ändra ditt val ovan eller i sidopanelen.</p>';
+  if (!planned.length && !days.some(d => city.notes?.[d])) html += '<p class="empty-state">Inga planerade aktiviteter den här dagen.</p>';
   for (const day of days) {
-    const stops = matching.filter(p => p.date === day);
+    const stops = planned.filter(p => p.date === day);
     if (!stops.length && !city.notes?.[day] && !state.day) continue;
     html += `<section class="plan-day"><div class="plan-day-title"><h3>${dayText(day, true)}</h3><button class="text-button" data-map-day="${day}">Visa stadens karta</button></div>`;
     if (city.notes?.[day]) html += `<div class="notice">${esc(city.notes[day])}</div>`;
-    const groups = [ ['Dagens ordning', p => p.category === 'activity' && p.status !== 'Valfritt'], ['Mat att välja bland', p => p.category === 'food'], ['Kaféer · kaffe och te', p => p.category === 'cafe'], ['Sötsaker', p => p.category === 'sweet'], ['Valfria aktiviteter · om ni har tid och lust', p => p.category === 'activity' && p.status === 'Valfritt'] ];
+    const groups = [ ['Dagens ordning', p => p.status !== 'Valfritt'], ['Valfria aktiviteter · om ni har tid och lust', p => p.status === 'Valfritt'] ];
     for (const [heading, check] of groups) { const group = stops.filter(check); if (group.length) html += `<h4 class="plan-section-title">${heading}</h4>` + group.map(planPlace).join(''); }
     if (!stops.length) html += '<p class="row-meta">Inga extra stopp med de valda filtren den här dagen.</p>';
     html += '</section>';
   }
-  const flexible = matching.filter(p => !p.date);
+  const flexible = planned.filter(p => !p.date);
   if (flexible.length) html += '<section class="plan-day"><h3>Valfri dag under vistelsen</h3><p class="row-meta">Välj när det passar. Alla alternativ finns också på stadens karta.</p>' + flexible.map(planPlace).join('') + '</section>';
   html += `<footer class="data-version">Platslista uppdaterad ${esc(data.updatedAt.slice(0, 10))}. Ändringar i den gemensamma listan visas här och på kartan när sidan laddas om.<br>Kartan visar platser, inte en beräknad gångrutt. Kartunderlag: OpenFreeMap / OpenMapTiles / OpenStreetMap.<br><button class="reload-button" id="reload-data">↻ Hämta senaste planen</button></footer>`;
   $('plan-view').innerHTML = html;

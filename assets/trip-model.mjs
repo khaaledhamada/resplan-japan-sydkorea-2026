@@ -97,9 +97,55 @@ export function filterPlaces(places, state) {
     (!query || fold([p.name, p.area, p.address, p.description_sv, p.label, ...(p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)), ...(p.cafe_tags || []).map(tag => CAFE_TYPES[tag])].join(' ')).includes(query)));
 }
 
+// Dagsplan is deliberately an activity-only view.  Restaurants, cafés and
+// sweets stay discoverable on Karta, where the category and food filters live.
+export function planPlaces(places, state) {
+  return places.filter(p => p.city === state.city && p.category === 'activity' &&
+    (!state.day || !p.date || p.date === state.day) &&
+    (state.optional || p.status !== 'Valfritt'));
+}
+
 export function daysForCity(data, city) {
   const c = data.cities.find(c => c.id === city);
   return [...new Set([...data.places.filter(p => p.city === city).map(p => p.date).filter(Boolean), ...Object.keys(c?.notes || {})])].sort();
+}
+
+// The itinerary has a few dates where more than one city contains a note
+// (arrival, excursion or transfer).  Keep the normal city picker as the
+// explicit override, but make the first visit to the root URL land on the
+// city that matches the current local travel date.  Transfer day 17 October
+// changes city after the planned Kyoto departure around 14:00 (Japan time).
+const DATE_CITY_OVERRIDES = {
+  '2026-10-07': 'tokyo',
+  '2026-10-11': 'fuji',
+  '2026-10-12': 'hakone',
+  '2026-10-13': 'hakone',
+  '2026-10-14': 'kyoto',
+};
+
+function dateParts(now, timeZone) {
+  return Object.fromEntries(new Intl.DateTimeFormat('sv-SE', {
+    timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false,
+  }).formatToParts(now).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+}
+
+export function cityForDate(data, now = new Date()) {
+  const tokyoParts = dateParts(now, 'Asia/Tokyo');
+  const tokyoDay = `${tokyoParts.year}-${tokyoParts.month}-${tokyoParts.day}`;
+  const candidates = data.cities.filter(c => {
+    const local = dateParts(now, c.id === 'seoul' ? 'Asia/Seoul' : 'Asia/Tokyo');
+    return daysForCity(data, c.id).includes(`${local.year}-${local.month}-${local.day}`);
+  });
+  if (!candidates.length) return null;
+  const byId = new Map(candidates.map(c => [c.id, c]));
+  if (tokyoDay === '2026-10-17') {
+    const transferCity = Number(tokyoParts.hour) >= 14 ? 'osaka' : 'kyoto';
+    if (byId.has(transferCity)) return byId.get(transferCity);
+  }
+  const override = DATE_CITY_OVERRIDES[tokyoDay];
+  if (override && byId.has(override)) return byId.get(override);
+  const routeOrder = ['seoul', 'tokyo', 'fuji', 'hakone', 'kyoto', 'osaka'];
+  return candidates.slice().sort((a, b) => routeOrder.indexOf(a.id) - routeOrder.indexOf(b.id))[0];
 }
 
 export function dayText(day, weekday = false) {
@@ -129,11 +175,31 @@ export function initialSelection(data, params, now = new Date(), preferences = {
   const saved = parsePreferences(preferences);
   // Stable place links keep working when an excursion moves to another city.
   const linkedPlace = data.places.find(p => p.id === params.get('place'));
-  let city = data.cities.find(c => c.id === (linkedPlace?.city || params.get('city')));
+  // `autocity=1` is written by the app after an automatic selection.  It lets
+  // a bookmarked URL recalculate tomorrow's city instead of freezing the city
+  // that happened to be active when the bookmark was created.  A normal city
+  // query remains an explicit manual/shared-link choice.
+  const autoCityParam = params.get('autocity') === '1';
+  const explicitCity = linkedPlace?.city || (!autoCityParam && params.get('city'));
+  const autoEligible = !linkedPlace && (!params.has('city') || autoCityParam);
+  let city = data.cities.find(c => c.id === explicitCity);
+  let automaticCity = autoEligible;
+  // A URL city/place is intentional.  Otherwise the current travel date wins
+  // over a stale saved city, so the page follows the itinerary on a new day.
+  if (!city && (!params.has('city') || autoCityParam)) {
+    const datedCity = cityForDate(data, now);
+    if (datedCity) city = datedCity;
+  }
   if (!city) city = data.cities.find(c => c.id === saved.city);
-  const localDay = c => new Intl.DateTimeFormat('sv-SE', { timeZone: c.id === 'seoul' ? 'Asia/Seoul' : 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  // Fuji is a Tokyo day trip; select its dedicated map on the excursion day.
-  if (!city) city = [...data.cities].reverse().find(c => daysForCity(data, c.id).includes(localDay(c))) || data.cities[0];
+  if (!city) {
+    const datedCity = cityForDate(data, now);
+    if (datedCity) city = datedCity;
+  }
+  if (!city) city = data.cities[0];
+  const localDay = c => {
+    const parts = dateParts(now, c.id === 'seoul' ? 'Asia/Seoul' : 'Asia/Tokyo');
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  };
   const cityFilter = saved.cityFilters?.[city.id] || {};
   const days = daysForCity(data, city.id), requestedDay = params.get('day');
   const view = ['map', 'plan', 'details'].includes(params.get('view')) ? params.get('view') : params.has('view') || linkedPlace ? 'map' : saved.view || 'map';
@@ -153,7 +219,7 @@ export function initialSelection(data, params, now = new Date(), preferences = {
     if (!params.has('cafe') && linkedPlace.category === 'cafe' && !linkedPlace.cafe_tags?.includes(cafeType)) cafeType = '';
     if (!params.has('food') && linkedPlace.category === 'food' && !linkedPlace.food_tags?.includes(foodType)) foodType = '';
   }
-  return { city: city.id, day, query: '', categories, foodType, cafeType, optional, view, selected: params.get('place') || null };
+  return { city: city.id, day, query: '', categories, foodType, cafeType, optional, view, selected: params.get('place') || null, autoCity: automaticCity };
 }
 
 export function googleMapsUrl(p) {

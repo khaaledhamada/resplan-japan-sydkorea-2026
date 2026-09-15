@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { numberPlaces, groupMapPlaces, filterPlaces, initialSelection, parsePreferences, selectionPreferences, cafeOptions, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink } from '../assets/trip-model.mjs';
+import { numberPlaces, groupMapPlaces, filterPlaces, planPlaces, initialSelection, cityForDate, parsePreferences, selectionPreferences, cafeOptions, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink } from '../assets/trip-model.mjs';
 import { encryptText, decryptText } from '../scripts/crypto.mjs';
 import { randomBytes } from 'node:crypto';
 const place = (id, extra = {}) => ({ id, city: 'tokyo', name: 'Plats ' + id, category: 'activity', date: '2026-10-08', sequence: 1, lat: 35.6, lon: 139.7, description_sv: 'Promenad', address: 'Tokyo, Japan', status: 'Planerat', ...extra });
@@ -50,6 +50,48 @@ test('plan day selection respects city timezone and valid explicit links', () =>
   assert.equal(initialSelection(data, new URLSearchParams('view=plan&day=&city=tokyo')).day, '');
   assert.equal(initialSelection(data, new URLSearchParams('day=2026-10-12&view=plan')).day, '2026-10-12');
   assert.equal(initialSelection(data, new URLSearchParams('day=2026-10-30&view=plan')).day, '');
+});
+test('root URL follows the itinerary city for the travel date, including transfer day', () => {
+  const data = {
+    ...base,
+    cities: [
+      { id: 'seoul', name: 'Seoul', notes: { '2026-10-03': 'Ankomst' } },
+      { id: 'tokyo', name: 'Tokyo', notes: { '2026-10-07': 'Flyg' } },
+      { id: 'fuji', name: 'Fuji', notes: { '2026-10-11': 'Utflykt' } },
+      { id: 'hakone', name: 'Hakone', notes: { '2026-10-12': 'Ryokan' } },
+      { id: 'kyoto', name: 'Kyoto', notes: { '2026-10-14': 'Ankomst', '2026-10-17': 'Avresa' } },
+      { id: 'osaka', name: 'Osaka', notes: { '2026-10-17': 'Ankomst', '2026-10-19': 'Hemresa' } },
+    ],
+  };
+  assert.equal(cityForDate(data, new Date('2026-10-03T08:00:00Z')).id, 'seoul');
+  assert.equal(cityForDate(data, new Date('2026-10-07T09:00:00Z')).id, 'tokyo');
+  assert.equal(cityForDate(data, new Date('2026-10-11T09:00:00Z')).id, 'fuji');
+  assert.equal(cityForDate(data, new Date('2026-10-12T09:00:00Z')).id, 'hakone');
+  assert.equal(cityForDate(data, new Date('2026-10-17T03:00:00Z')).id, 'kyoto');
+  assert.equal(cityForDate(data, new Date('2026-10-17T06:00:00Z')).id, 'osaka');
+  assert.equal(cityForDate(data, new Date('2026-10-20T09:00:00Z')), null);
+  const saved = { version: 1, city: 'seoul', categories: ['activity'], optional: true, cityFilters: {} };
+  const automatic = initialSelection(data, new URLSearchParams(), new Date('2026-10-12T09:00:00Z'), saved);
+  assert.equal(automatic.city, 'hakone');
+  assert.equal(automatic.autoCity, true);
+  const bookmarkedAutomatic = initialSelection(data, new URLSearchParams('city=seoul&autocity=1'), new Date('2026-10-12T09:00:00Z'), saved);
+  assert.equal(bookmarkedAutomatic.city, 'hakone');
+  assert.equal(bookmarkedAutomatic.autoCity, true);
+  const explicit = initialSelection(data, new URLSearchParams('city=seoul'), new Date('2026-10-12T09:00:00Z'));
+  assert.equal(explicit.city, 'seoul');
+  assert.equal(explicit.autoCity, false);
+});
+test('Dagsplan contains activities only; food stays on Karta', () => {
+  const places = numberPlaces([
+    place('walk'),
+    place('optional-walk', { status: 'Valfritt', date: '2026-10-08' }),
+    place('restaurant', { category: 'food', food_tags: ['ramen'] }),
+    place('cafe', { category: 'cafe', cafe_tags: ['matcha'] }),
+    place('sweet', { category: 'sweet' }),
+  ]);
+  const state = { city: 'tokyo', day: '2026-10-08', optional: true };
+  assert.deepEqual(planPlaces(places, state).map(p => p.id).sort(), ['optional-walk', 'walk']);
+  assert.deepEqual(planPlaces(places, { ...state, optional: false }).map(p => p.id), ['walk']);
 });
 test('a saved place link follows its new city after an itinerary move', () => {
   const data = { ...base, cities: [...base.cities, { id: 'kyoto', name: 'Kyoto' }], places: [
