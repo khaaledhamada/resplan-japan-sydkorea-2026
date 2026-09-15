@@ -51,6 +51,16 @@ test('plan day selection respects city timezone and valid explicit links', () =>
   assert.equal(initialSelection(data, new URLSearchParams('day=2026-10-12&view=plan')).day, '2026-10-12');
   assert.equal(initialSelection(data, new URLSearchParams('day=2026-10-30&view=plan')).day, '');
 });
+test('a saved place link follows its new city after an itinerary move', () => {
+  const data = { ...base, cities: [...base.cities, { id: 'kyoto', name: 'Kyoto' }], places: [
+    place('other'), place('saved-excursion', { city: 'kyoto', date: '2026-10-16', status: 'Valfritt' }),
+  ] };
+  const state = initialSelection(data, new URLSearchParams('city=tokyo&place=saved-excursion'));
+  assert.equal(state.city, 'kyoto');
+  assert.equal(state.selected, 'saved-excursion');
+  assert.deepEqual(filterPlaces(data.places, state).map(p => p.id), ['saved-excursion']);
+  assert.equal(initialSelection(data, new URLSearchParams('city=tokyo&place=missing')).city, 'tokyo');
+});
 test('map groups put main activities before earlier optional stops and retain numeric order', () => {
   const places = numberPlaces([
     ...Array.from({ length: 12 }, (_, i) => place('main-' + (i + 1), { sequence: i + 1 })),

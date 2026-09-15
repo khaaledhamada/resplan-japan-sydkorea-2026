@@ -99,7 +99,9 @@ export function dayText(day, weekday = false) {
 }
 
 export function initialSelection(data, params, now = new Date()) {
-  let city = data.cities.find(c => c.id === params.get('city'));
+  // Stable place links keep working when an excursion moves to another city.
+  const linkedPlace = data.places.find(p => p.id === params.get('place'));
+  let city = data.cities.find(c => c.id === (linkedPlace?.city || params.get('city')));
   const localDay = c => new Intl.DateTimeFormat('sv-SE', { timeZone: c.id === 'seoul' ? 'Asia/Seoul' : 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
   // Fuji is a Tokyo day trip; select its dedicated map on the excursion day.
   if (!city) city = [...data.cities].reverse().find(c => daysForCity(data, c.id).includes(localDay(c))) || data.cities[0];

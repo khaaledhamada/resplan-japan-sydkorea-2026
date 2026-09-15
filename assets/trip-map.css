@@ -23,6 +23,8 @@
 .map-place-group:first-child h3{margin-top:12px}
 .map-place-group .place-row:first-of-type{border-top:0}
 
+/* The red tip marks north; MapLibre rotates the icon with the map. */
+#map .maplibregl-ctrl-compass .maplibregl-ctrl-icon{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23d93025' d='M12 2 6 12h12Z'/%3E%3Cpath fill='%23818b98' d='m12 22 6-10H6Z'/%3E%3C/svg%3E");background-size:24px 24px}
 /* On phones the map is the entire canvas; controls and lists float over it. */
 @media(max-width:700px),(max-width:1000px) and (max-height:500px){
   .app[data-view=map]{display:block;--map-nav:calc(62px + env(safe-area-inset-bottom));--map-peek:56px}

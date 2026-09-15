@@ -1,4 +1,4 @@
-import { CATEGORIES, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260914.4';
+import { CATEGORIES, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, daysForCity, dayText, initialSelection, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260915.1';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -304,9 +304,10 @@ async function startMap() {
     const lib = await loadMapLibrary();
     if (!lib) throw Error('Kartbiblioteket saknas');
     const first = matching[0] || places.find(p => p.city === state.city);
-    map = new lib.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty', center: [first.lon, first.lat], zoom: 11, attributionControl: false, renderWorldCopies: false, localIdeographFontFamily: false });
+    map = new lib.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty', center: [first.lon, first.lat], zoom: 11, attributionControl: false, renderWorldCopies: false, localIdeographFontFamily: false,
+      locale: { 'NavigationControl.ResetBearing': 'Återställ kartan mot norr', 'NavigationControl.ZoomIn': 'Zooma in', 'NavigationControl.ZoomOut': 'Zooma ut' } });
     map.addControl(new lib.AttributionControl({ compact: false }), 'bottom-left');
-    map.addControl(new lib.NavigationControl({ showCompass: false }), 'bottom-right');
+    map.addControl(new lib.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
     const locationControl = new lib.GeolocateControl({ positionOptions: { enableHighAccuracy: false }, trackUserLocation: false, showUserHeading: false });
     locationControl.on('error', () => toast('Din position kunde inte hämtas. Du kan fortfarande välja platser och öppna Google Maps.'));
     map.addControl(locationControl, 'bottom-right');
