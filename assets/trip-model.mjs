@@ -204,8 +204,9 @@ export function initialSelection(data, params, now = new Date(), preferences = {
   const cityFilter = saved.cityFilters?.[city.id] || {};
   const days = daysForCity(data, city.id), requestedDay = params.get('day');
   const view = ['map', 'plan', 'details'].includes(params.get('view')) ? params.get('view') : params.has('view') || linkedPlace ? 'map' : saved.view || 'map';
-  // The city map always includes every day, including links made before that change.
-  const day = view === 'map' ? '' : params.has('day') ? (days.includes(requestedDay) ? requestedDay : '') : cityFilter.day === '' || days.includes(cityFilter.day) ? cityFilter.day : (days.includes(localDay(city)) ? localDay(city) : days[0] || '');
+  // The city map defaults to every day, but an explicit day remains a useful
+  // filter on the map as well as in Dagsplan.
+  const day = params.has('day') ? (days.includes(requestedDay) ? requestedDay : '') : view === 'map' ? '' : cityFilter.day === '' || days.includes(cityFilter.day) ? cityFilter.day : (days.includes(localDay(city)) ? localDay(city) : days[0] || '');
   const requestedFood = params.has('food') ? params.get('food') : cityFilter.foodType;
   let foodType = requestedFood === 'all' || foodOptions(data.places, city.id).some(o => o.id === requestedFood) ? requestedFood : '';
   const requestedCafe = params.has('cafe') ? params.get('cafe') : cityFilter.cafeType;

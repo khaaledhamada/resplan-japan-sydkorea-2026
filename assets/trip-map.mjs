@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.9';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.11';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -99,7 +99,6 @@ function layout() {
             <fieldset class="category-filters"><legend>Visa på kartan</legend><p class="filter-hint">Bocka i det ni vill se · dubbeltryck på en kategori för alla</p><div class="category-options">${Object.entries(CATEGORIES).map(([key, c]) => `<label class="category-option" data-category-option="${key}"><input type="checkbox" data-category="${key}" checked><span>${c.name}</span></label>`).join('')}</div></fieldset>
             <label class="food-filter"><span id="food-filter-label">Matfilter</span><select id="food-type" aria-labelledby="food-filter-label"></select></label>
             <label class="food-filter cafe-filter"><span id="cafe-filter-label">Kaféfilter</span><select id="cafe-type" aria-labelledby="cafe-filter-label"></select></label>
-            <label class="optional-toggle"><input id="optional" type="checkbox" checked>Visa valfria aktiviteter (V)</label>
             <p class="preferences-note" id="preferences-note">Dina val sparas i den här webbläsaren.</p>
           </div>
         </div>
@@ -128,6 +127,7 @@ function layout() {
   new ResizeObserver(() => $('app').style.setProperty('--controls-height', document.querySelector('.controls').offsetHeight + 'px')).observe(document.querySelector('.controls'));
   $('city').addEventListener('change', () => {
     state = initialSelection(data, new URLSearchParams({ city: $('city').value, view: state.view }), new Date(), savedPreferences);
+    state.optional = true;
     $('search').value = ''; updateDays(); refresh(true, true);
   });
   $('food-type').addEventListener('change', () => {
@@ -143,7 +143,6 @@ function layout() {
   $('day').addEventListener('change', () => { state.day = $('day').value; refresh(); });
   $('search').addEventListener('input', () => { state.query = $('search').value; refresh(); });
   $('clear-search').addEventListener('click', () => { state.query = ''; $('search').value = ''; refresh(); $('search').focus(); });
-  $('optional').addEventListener('change', () => { state.optional = $('optional').checked; refresh(); });
   const categoryClicks = [];
   document.querySelectorAll('[data-category]').forEach(input => {
     // Listen on the input so label activation is counted once, not twice.
@@ -199,7 +198,8 @@ function layout() {
     $('app').classList.remove('sheet-open');
     $('sheet-toggle').textContent = 'Visa lista ↑'; $('sheet-toggle').setAttribute('aria-expanded', 'false');
     state = restored;
-    $('city').value = state.city; $('search').value = state.query; $('optional').checked = state.optional;
+    state.optional = true;
+    $('city').value = state.city; $('search').value = state.query;
     updateDays(); refresh(false, cityChanged); changeView(state.view, false);
     if (state.selected && matching.some(p => p.id === state.selected)) selectPlace(state.selected);
     else closeDetail();
@@ -228,7 +228,7 @@ function updateUrl() {
   const url = new URL(location.href);
   url.searchParams.set('city', state.city); url.searchParams.set('view', state.view);
   if (state.autoCity) url.searchParams.set('autocity', '1'); else url.searchParams.delete('autocity');
-  if (state.view === 'map') url.searchParams.delete('day'); else url.searchParams.set('day', state.day);
+  if (state.day) url.searchParams.set('day', state.day); else url.searchParams.delete('day');
   if (state.selected) url.searchParams.set('place', state.selected); else url.searchParams.delete('place');
   url.searchParams.set('food', state.foodType);
   url.searchParams.set('cafe', state.cafeType || '');
@@ -241,8 +241,6 @@ function updateUrl() {
 
 function refresh(clear = true, refit = false) {
   if (clear) closeDetail();
-  if (state.view === 'map') state.day = '';
-  $('optional').checked = state.optional;
   updateFoodOptions();
   matching = filterPlaces(places, state);
   $('list-title').textContent = data.cities.find(c => c.id === state.city).name;
@@ -252,10 +250,9 @@ function refresh(clear = true, refit = false) {
     b.checked = state.categories.includes(b.dataset.category);
   });
   $('filters-summary').textContent = 'Filter · ' + state.categories.length + ' valda';
-  $('optional').disabled = !state.categories.includes('activity');
   $('place-list').innerHTML = matching.length ? groupMapPlaces(matching).map(group => `<section class="map-place-group" data-group="${group.id}" aria-labelledby="group-${group.id}"><h3 id="group-${group.id}">${group.title}</h3>${group.places.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)}${p.category === 'food' ? ' · ' + esc((p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)).join(' / ')) : p.category === 'cafe' ? ' · ' + esc((p.cafe_tags || []).map(tag => CAFE_TYPES[tag]).join(' / ')) : ''} · ${esc(placeType(p))}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('')}</section>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan sökning eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
   $('place-list').querySelectorAll('[data-place]').forEach(b => b.addEventListener('click', () => selectPlace(b.dataset.place, b)));
-  $('reset-filters')?.addEventListener('click', () => { state.day = ''; state.query = ''; state.foodType = ''; state.cafeType = ''; state.categories = Object.keys(CATEGORIES); state.optional = true; $('search').value = ''; $('optional').checked = true; updateDays(); refresh(); });
+  $('reset-filters')?.addEventListener('click', () => { state.day = ''; state.query = ''; state.foodType = ''; state.cafeType = ''; state.categories = Object.keys(CATEGORIES); state.optional = true; $('search').value = ''; updateDays(); refresh(); });
   renderPlan(); renderMarkers(); if (refit) fitMap(); updateUrl();
 }
 
@@ -271,7 +268,7 @@ function changeView(view, update = true) {
     if (b.dataset.view === view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   if (view === 'map') {
-    state.day = ''; updateDays();
+    updateDays();
     if (previous !== view) refresh(false);
     requestAnimationFrame(() => { map?.resize(); if (cameraCity !== state.city) fitMap(); }); startMap();
   }
@@ -565,6 +562,7 @@ async function boot() {
   places = numberPlaces(data.places);
   savedPreferences = readSavedPreferences();
   state = initialSelection(data, new URLSearchParams(location.search), new Date(), savedPreferences);
+  state.optional = true;
   layout(); refresh(false); changeView(state.view);
   const selected = state.selected;
   if (selected && matching.some(p => p.id === selected)) selectPlace(selected);

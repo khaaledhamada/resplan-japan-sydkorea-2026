@@ -16,8 +16,8 @@
 /* The city map includes the whole stay. Date selection belongs to Dagsplan. */
 .search-row{display:flex;align-items:center;gap:8px}
 .search-row .search-field{flex:1;min-width:0}
-.app[data-view=map] .day-filter,.app[data-view=map] .optional-toggle{display:none}
-.app[data-view=map] .selects{grid-template-columns:1fr}
+.app[data-view=map] .optional-toggle{display:none}
+.app[data-view=map] .selects{grid-template-columns:1fr 1fr}
 .app[data-view=map] .chips{margin-bottom:18px}
 .map-place-group h3{font-size:12px;line-height:1.5;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 10px;font-weight:700}
 .map-place-group:first-child h3{margin-top:12px}
@@ -48,7 +48,6 @@
   .app[data-view=map] .select-box{height:36px;min-height:36px;border:0;border-radius:22px;background:white;padding:0 9px;display:flex;align-items:center;box-shadow:0 2px 8px #21365120}
   .app[data-view=map] .select-box>span{display:none}
   .app[data-view=map] .select-box select{min-width:0;font-size:16px;min-height:30px}
-  .app[data-view=map] .day-filter{display:none}
   .app[data-view=map] .chips{flex-wrap:nowrap;gap:6px;margin:0}
   .app[data-view=map] .chip{font-size:12px;min-height:36px;padding:6px 9px;background:white;box-shadow:0 2px 8px #21365118}
   .app[data-view=map] .chip[aria-pressed=true]{background:color-mix(in srgb,var(--cat) 7%,white)}

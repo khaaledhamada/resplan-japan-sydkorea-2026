@@ -65,14 +65,14 @@ test('search finds a place by the person who recommended it', () => {
   for (const query of ['zozo', 'RORO']) assert.deepEqual(filterPlaces(places, { ...state, query }).map(p => p.id), ['sushi']);
 });
 
-test('city map opens all days and includes optional activities, even from an old dated link', () => {
+test('city map defaults to all days but preserves an explicit day filter', () => {
   const data = { ...base, places: [place('a'), place('b', { date: '2026-10-09', status: 'Valfritt' })] };
   for (const query of ['', 'day=2026-10-08&city=tokyo', 'view=map&day=2026-10-08&city=tokyo', 'view=unknown&day=2026-10-08']) {
     const state = initialSelection(data, new URLSearchParams(query), new Date('2026-10-07T22:00:00Z'));
     assert.equal(state.view, 'map');
-    assert.equal(state.day, '');
+    assert.equal(state.day, query.includes('day=2026-10-08') ? '2026-10-08' : '');
     assert.equal(state.optional, true);
-    assert.deepEqual(filterPlaces(data.places, state).map(p => p.id), ['a', 'b']);
+    assert.deepEqual(filterPlaces(data.places, state).map(p => p.id), state.day ? ['a'] : ['a', 'b']);
   }
 });
 test('plan day selection respects city timezone and valid explicit links', () => {
