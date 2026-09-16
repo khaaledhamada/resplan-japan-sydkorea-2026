@@ -166,9 +166,10 @@ function layout() {
     // A double tap is a quick, discoverable "show everything" action. Clear
     // the food/café subfilters too, otherwise the category boxes would all be
     // checked while a hidden type filter still narrowed the map.
+    state.day = '';
     state.categories = Object.keys(CATEGORIES);
     state.foodType = ''; state.cafeType = ''; state.optional = true;
-    refresh();
+    updateDays(); refresh();
   }));
   $('filters-toggle').addEventListener('click', () => {
     const open = $('filter-panel').classList.toggle('is-open');
