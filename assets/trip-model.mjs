@@ -12,6 +12,9 @@ export const CAFE_TYPES = { matcha: 'Matcha', tea: 'Te', coffee: 'Kaffe', bakery
 export function placeInCity(place, city) {
   return place.city === city || (city === 'tokyo' && place.city === 'fuji' && place.date === '2026-10-11');
 }
+export function isExcursionAlternative(place) {
+  return place.status === 'Valfritt' || (place.city === 'fuji' && place.date === '2026-10-11');
+}
 export function cafeOptions(places, city) {
   return Object.entries(CAFE_TYPES).map(([id, label]) => ({id, label, count: places.filter(p => placeInCity(p, city) && p.category === 'cafe' && p.cafe_tags?.includes(id)).length})).filter(o => o.count);
 }
@@ -83,8 +86,8 @@ export function numberPlaces(places) {
 export function groupMapPlaces(places) {
   const ordered = orderedPlaces(places).sort((a, b) => String(a.label || '').localeCompare(String(b.label || ''), 'sv', { numeric: true }));
   return [
-    { id: 'activity', title: 'Aktiviteter', matches: p => p.category === 'activity' && p.status !== 'Valfritt' },
-    { id: 'optional', title: 'Valfria aktiviteter', matches: p => p.category === 'activity' && p.status === 'Valfritt' },
+    { id: 'activity', title: 'Aktiviteter', matches: p => p.category === 'activity' && !isExcursionAlternative(p) },
+    { id: 'optional', title: 'Valfria aktiviteter', matches: p => p.category === 'activity' && isExcursionAlternative(p) },
     { id: 'food', title: 'Mat', matches: p => p.category === 'food' },
     { id: 'cafe', title: 'Kaféer', matches: p => p.category === 'cafe' },
     { id: 'sweet', title: 'Sötsaker', matches: p => p.category === 'sweet' },

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { numberPlaces, groupMapPlaces, filterPlaces, planPlaces, initialSelection, cityForDate, parsePreferences, selectionPreferences, cafeOptions, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink, placeInCity, daysForCity } from '../assets/trip-model.mjs';
+import { numberPlaces, groupMapPlaces, filterPlaces, planPlaces, initialSelection, cityForDate, parsePreferences, selectionPreferences, cafeOptions, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink, placeInCity, daysForCity, isExcursionAlternative } from '../assets/trip-model.mjs';
 import { encryptText, decryptText } from '../scripts/crypto.mjs';
 import { randomBytes } from 'node:crypto';
 const place = (id, extra = {}) => ({ id, city: 'tokyo', name: 'Plats ' + id, category: 'activity', date: '2026-10-08', sequence: 1, lat: 35.6, lon: 139.7, description_sv: 'Promenad', address: 'Tokyo, Japan', status: 'Planerat', ...extra });
@@ -125,6 +125,7 @@ test('Fuji and Kawaguchiko are visible as Tokyo alternatives on October 11', () 
     ],
   };
   assert.equal(placeInCity(data.places[1], 'tokyo'), true);
+  assert.equal(isExcursionAlternative(data.places[1]), true);
   assert.equal(placeInCity(data.places[1], 'kyoto'), false);
   assert.deepEqual(daysForCity(data, 'tokyo'), ['2026-10-11', '2026-10-12']);
   const state = initialSelection(data, new URLSearchParams('city=tokyo&view=map&day=2026-10-11'));

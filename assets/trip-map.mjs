@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity } from './trip-model.mjs?v=20260916.12';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.13';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -414,7 +414,7 @@ function renderPlan() {
     if (!stops.length && !city.notes?.[day] && !state.day) continue;
     html += `<section class="plan-day"><div class="plan-day-title"><h3>${dayText(day, true)}</h3><button class="text-button" data-map-day="${day}">Visa stadens karta</button></div>`;
     if (city.notes?.[day]) html += `<div class="notice">${esc(city.notes[day])}</div>`;
-    const groups = [ ['Dagens ordning', p => p.status !== 'Valfritt'], ['Valfria aktiviteter · om ni har tid och lust', p => p.status === 'Valfritt'] ];
+    const groups = [ ['Dagens ordning', p => !isExcursionAlternative(p)], ['Valfria aktiviteter · om ni har tid och lust', isExcursionAlternative] ];
     for (const [heading, check] of groups) { const group = stops.filter(check); if (group.length) html += `<h4 class="plan-section-title">${heading}</h4>` + group.map(planPlace).join(''); }
     if (!stops.length) html += '<p class="row-meta">Inga extra stopp med de valda filtren den här dagen.</p>';
     html += '</section>';
