@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.7';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.8';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -494,9 +494,10 @@ async function startMap() {
       // already usable. Do not cover a working map with the fatal fallback.
       if (!mapReady) mapMessage('Delar av kartunderlaget kunde inte laddas. Platslistan och Google Maps fungerar ändå. Prova att ladda om sidan när du har internet.');
     });
-    map.on('load', () => { mapReady = true; $('map-status').hidden = true; });
+    const markMapReady = () => { mapReady = true; $('map-status').hidden = true; };
+    map.on('load', markMapReady);
     const initialTimer = setTimeout(() => { if (!map.isStyleLoaded()) mapMessage('Kartunderlaget laddar långsamt. Du kan använda platslistan och Google Maps under tiden.'); }, 18000);
-    map.once('idle', () => { clearTimeout(initialTimer); $('map-status').hidden = true; });
+    map.once('idle', () => { clearTimeout(initialTimer); markMapReady(); });
     map.getCanvas().setAttribute('aria-label', 'Interaktiv karta. Platslistan ger samma information utan karta.');
     renderMarkers(); fitMap();
     if (state.selected && matching.some(p => p.id === state.selected)) selectPlace(state.selected);
