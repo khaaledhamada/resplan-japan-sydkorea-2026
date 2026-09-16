@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.8';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.9';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -476,13 +476,13 @@ async function startMap() {
     // Keep wheel/trackpad zoom and the release momentum gentle enough for a
     // travel map. MapLibre's defaults are tuned for a desktop map with more
     // room; this page also has list and detail overlays around the canvas.
-    map.scrollZoom.setWheelZoomRate(1 / 600);
-    map.scrollZoom.setZoomRate(1 / 150);
-    map.touchZoomRotate.setZoomRate(0.75);
-    map.touchZoomRotate.setZoomThreshold(0.2);
-    map.dragPan.enable({ linearity: 0.12, maxSpeed: 1100, deceleration: 3000 });
-    map.touchZoomRotate.disableRotation();
-    map.touchPitch.disable();
+    map.scrollZoom?.setWheelZoomRate?.(1 / 600);
+    map.scrollZoom?.setZoomRate?.(1 / 150);
+    map.touchZoomRotate?.setZoomRate?.(0.75);
+    map.touchZoomRotate?.setZoomThreshold?.(0.2);
+    map.dragPan?.enable?.({ linearity: 0.12, maxSpeed: 1100, deceleration: 3000 });
+    map.touchZoomRotate?.disableRotation?.();
+    map.touchPitch?.disable?.();
     map.addControl(new lib.AttributionControl({ compact: false }), 'bottom-left');
     map.addControl(new lib.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
     const locationControl = new lib.GeolocateControl({ positionOptions: { enableHighAccuracy: false }, trackUserLocation: false, showUserHeading: false });
