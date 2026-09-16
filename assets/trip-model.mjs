@@ -65,7 +65,7 @@ export function orderedPlaces(places) {
 export function numberPlaces(places) {
   const counters = {};
   return orderedPlaces(places).map(p => {
-    if (p.status === 'Boende') return { ...p, label: '' };
+    if (p.status === 'Boende' || p.status === 'Transport') return { ...p, label: '' };
     const prefix = p.category === 'food' ? 'M' : p.category === 'cafe' ? 'K' : p.category === 'sweet' ? 'S' : p.status === 'Valfritt' ? 'V' : '';
     const dated = p.category === 'activity' && p.date;
     const key = p.city + ':' + prefix + (dated ? ':' + p.date : '');

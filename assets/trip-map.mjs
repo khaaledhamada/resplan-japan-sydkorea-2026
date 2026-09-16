@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.2';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.6';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -17,11 +17,30 @@ const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">$
 const catStyle = p => `--cat:${CATEGORIES[p.category].color}`;
 const isOptionalActivity = p => p.category === 'activity' && p.status === 'Valfritt';
 const isLodging = p => p.status === 'Boende';
+const isTransport = p => p.status === 'Transport';
+const transportKind = p => {
+  const text = `${p.name} ${p.description_sv} ${p.address}`.toLocaleLowerCase('sv');
+  if (/buss|bus|flygplats|airport/.test(text)) return 'bus';
+  if (/båt|boat|sightseeingbåt/.test(text)) return 'boat';
+  if (/linbana|ropeway|bergbanan|bergbana/.test(text)) return 'cable';
+  return 'train';
+};
 const lodgingIcon = '<svg class="lodging-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 10 12 2l10 8v11H2Z"/><path d="M9 21v-7h6v7Z"/></svg>';
 const lodgingMarker = '<svg class="pin-house" viewBox="0 0 44 44" aria-hidden="true"><path class="pin-house-fill" d="M3 18 22 3l19 15v23H3Z"/><path class="pin-house-door" d="M17 41V27h10v14Z"/></svg>';
+const transportIcons = {
+  train: '<rect x="7" y="4" width="30" height="28" rx="6"/><path d="M7 22h30M13 12h6m6 0h6M13 37l-4 4m22-4 4 4"/><circle cx="15" cy="27" r="2"/><circle cx="29" cy="27" r="2"/>',
+  bus: '<rect x="6" y="5" width="32" height="29" rx="6"/><path d="M6 21h32M12 12h20M12 39l-3 2m23-2 3 2"/><circle cx="14" cy="28" r="2"/><circle cx="30" cy="28" r="2"/>',
+  cable: '<path d="M4 9h36M22 9v7M10 9l8 11m14-11-8 11"/><rect x="12" y="20" width="20" height="13" rx="3"/><path d="M16 37h12"/>',
+  boat: '<path d="M5 27h34l-4 8H9Z"/><path d="M10 27V15h24v12M16 15V9h12v6M5 39c3 2 5 2 8 0 3 2 5 2 8 0 3 2 5 2 8 0 3 2 5 2 8 0"/>',
+};
+const transportLabel = p => ({ train: 'Tåg', bus: 'Buss', cable: 'Linbana', boat: 'Båt' }[transportKind(p)]);
+const transportBadge = p => `<span class="number transport transport-${transportKind(p)}" title="${transportLabel(p)}" aria-label="${transportLabel(p)}" style="${catStyle(p)}"><svg class="transport-icon" viewBox="0 0 44 44" aria-hidden="true">${transportIcons[transportKind(p)]}</svg></span>`;
+const transportMarker = p => `<svg class="pin-transit pin-transit-${transportKind(p)}" viewBox="0 0 44 44" aria-hidden="true">${transportIcons[transportKind(p)]}</svg>`;
 const badge = p => isLodging(p)
   ? `<span class="number lodging" title="Boende" aria-label="Boende" style="${catStyle(p)}">${lodgingIcon}</span>`
+  : isTransport(p) ? transportBadge(p)
   : `<span class="number${isOptionalActivity(p) ? ' optional' : ''}${p.label.length > 4 ? ' long-number' : ''}" style="${catStyle(p)}">${esc(p.label)}</span>`;
+const placeType = p => isTransport(p) ? transportLabel(p) : p.status === 'Valfritt' ? 'Valfritt' : CATEGORIES[p.category].singular;
 const external = (url, label, cls = '') => `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 const bytes = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -94,7 +113,7 @@ function layout() {
       <section class="map-view" id="map-view" aria-label="Interaktiv resekarta">
         <div class="map-canvas" id="map" aria-label="Karta över resans platser"></div>
         <div class="map-tools"><button class="floating-button" id="fit-map">${icon('list')}Visa alla</button></div>
-        <div class="map-help">3.1 = 3 okt, aktivitet 1 · V = valfritt<br>M = mat · K = kaféer · S = sött · rött hus = boende</div>
+        <div class="map-help">3.1 = 3 okt, aktivitet 1 · V = valfritt<br>M = mat · K = kaféer · S = sött · rött hus = boende · blått tåg/buss = transport</div>
         <div class="map-status" id="map-status" role="status" hidden></div>
         <section class="place-detail" id="place-detail" aria-label="Platsdetaljer" hidden></section>
       </section>
@@ -234,7 +253,7 @@ function refresh(clear = true, refit = false) {
   });
   $('filters-summary').textContent = 'Filter · ' + state.categories.length + ' valda';
   $('optional').disabled = !state.categories.includes('activity');
-  $('place-list').innerHTML = matching.length ? groupMapPlaces(matching).map(group => `<section class="map-place-group" data-group="${group.id}" aria-labelledby="group-${group.id}"><h3 id="group-${group.id}">${group.title}</h3>${group.places.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)}${p.category === 'food' ? ' · ' + esc((p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)).join(' / ')) : p.category === 'cafe' ? ' · ' + esc((p.cafe_tags || []).map(tag => CAFE_TYPES[tag]).join(' / ')) : ''} · ${esc(p.status === 'Valfritt' ? 'Valfritt' : CATEGORIES[p.category].singular)}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('')}</section>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan sökning eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
+  $('place-list').innerHTML = matching.length ? groupMapPlaces(matching).map(group => `<section class="map-place-group" data-group="${group.id}" aria-labelledby="group-${group.id}"><h3 id="group-${group.id}">${group.title}</h3>${group.places.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)}${p.category === 'food' ? ' · ' + esc((p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)).join(' / ')) : p.category === 'cafe' ? ' · ' + esc((p.cafe_tags || []).map(tag => CAFE_TYPES[tag]).join(' / ')) : ''} · ${esc(placeType(p))}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('')}</section>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan sökning eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
   $('place-list').querySelectorAll('[data-place]').forEach(b => b.addEventListener('click', () => selectPlace(b.dataset.place, b)));
   $('reset-filters')?.addEventListener('click', () => { state.day = ''; state.query = ''; state.foodType = ''; state.cafeType = ''; state.categories = Object.keys(CATEGORIES); state.optional = true; $('search').value = ''; $('optional').checked = true; updateDays(); refresh(); });
   renderPlan(); renderMarkers(); if (refit) fitMap(); updateUrl();
@@ -267,9 +286,16 @@ function foodBadges(p) {
 
 function photoGallery(p) {
   const photos = (p.photos || []).filter(photo => safeLink(photo.src)?.startsWith('https:') && safeLink(photo.source));
+  const origins = [...new Set(photos.map(photo => { try { return new URL(photo.src).origin; } catch { return ''; } }).filter(Boolean))];
+  for (const origin of origins) {
+    if (![...document.head.querySelectorAll('link[rel="preconnect"]')].some(link => link.href === origin || link.href === origin + '/')) {
+      const link = document.createElement('link'); link.rel = 'preconnect'; link.href = origin; link.crossOrigin = 'anonymous'; document.head.append(link);
+    }
+  }
+  const placeholder = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
   return `<section class="place-photos" aria-label="Bilder på platsen">
     <div class="photo-heading"><strong>Bilder <span class="photo-total">(${photos.length})</span></strong>${photos.length > 1 ? '<div class="photo-buttons"><button class="photo-prev" aria-label="Föregående bild">‹</button><button class="photo-next" aria-label="Nästa bild">›</button></div>' : ''}</div>
-    <div class="photo-strip" tabindex="0" aria-label="Platsens bilder – svep för fler">${photos.map((photo, i) => `<figure class="place-photo"><a href="${esc(safeLink(photo.original_src) || photo.src)}" target="_blank" rel="noopener noreferrer" aria-label="Öppna stor bild: ${esc(photo.alt)}"><img src="${esc(photo.src)}" alt="${esc(photo.alt)}" width="${Number(photo.width) || 720}" height="${Number(photo.height) || 480}" decoding="async" referrerpolicy="no-referrer" loading="${i ? 'lazy' : 'eager'}" fetchpriority="${i ? 'low' : 'high'}"></a><figcaption>${external(photo.source, esc(photo.credit))}</figcaption></figure>`).join('')}</div>
+    <div class="photo-strip" tabindex="0" aria-label="Platsens bilder – svep för fler">${photos.map((photo, i) => `<figure class="place-photo"><a href="${esc(safeLink(photo.original_src) || photo.src)}" target="_blank" rel="noopener noreferrer" aria-label="Öppna stor bild: ${esc(photo.alt)}"><img src="${i ? placeholder : esc(photo.src)}"${i ? ` data-src="${esc(photo.src)}"` : ''} alt="${esc(photo.alt)}" width="${Number(photo.width) || 720}" height="${Number(photo.height) || 480}" decoding="async" referrerpolicy="no-referrer" loading="${i ? 'lazy' : 'eager'}" fetchpriority="${i ? 'low' : 'high'}"></a><figcaption>${external(photo.source, esc(photo.credit))}</figcaption></figure>`).join('')}</div>
     <p class="photo-fallback"${photos.length ? ' hidden' : ''}>Bilder visas inte här just nu. ${external(googleMapsUrl(p), 'Se platsens bilder i Google Maps ↗')}</p>
   </section>`;
 }
@@ -289,6 +315,11 @@ function bindPhotos() {
     const figures = visible();
     return figures.reduce((best, f, i) => Math.abs(f.getBoundingClientRect().left - left) < Math.abs(figures[best].getBoundingClientRect().left - left) ? i : best, 0);
   };
+  const loadImage = img => {
+    if (!img?.dataset.src) return;
+    img.src = img.dataset.src;
+    delete img.dataset.src;
+  };
   const update = () => {
     const figures = visible(), index = currentIndex();
     gallery.querySelector('.photo-total').textContent = `(${figures.length})`;
@@ -297,13 +328,13 @@ function bindPhotos() {
       gallery.querySelector('.photo-next').disabled = index >= figures.length - 1;
     }
     gallery.querySelector('.photo-fallback').hidden = figures.length > 0;
-    // Warm just the next small image, rather than fetching every place up front.
-    const next = figures[index + 1]?.querySelector('img');
-    if (next) next.loading = 'eager';
   };
   const step = direction => {
     const figures = visible(), target = figures[Math.max(0, Math.min(figures.length - 1, currentIndex() + direction))];
-    if (target) strip.scrollBy({ left: target.getBoundingClientRect().left - strip.getBoundingClientRect().left, behavior: reduced() ? 'instant' : 'smooth' });
+    if (target) {
+      loadImage(target.querySelector('img'));
+      strip.scrollBy({ left: target.getBoundingClientRect().left - strip.getBoundingClientRect().left, behavior: reduced() ? 'instant' : 'smooth' });
+    }
   };
   gallery.querySelector('.photo-prev')?.addEventListener('click', () => step(-1));
   gallery.querySelector('.photo-next')?.addEventListener('click', () => step(1));
@@ -316,6 +347,18 @@ function bindPhotos() {
     img.addEventListener('error', failed, { once: true });
     if (img.complete && !img.naturalWidth) failed();
   });
+  const deferred = [...strip.querySelectorAll('img[data-src]')];
+  const loadVisible = () => {
+    const bounds = strip.getBoundingClientRect();
+    deferred.forEach(img => {
+      const rect = img.getBoundingClientRect();
+      if (rect.left < bounds.right && rect.right > bounds.left) loadImage(img);
+    });
+  };
+  // Do not let the browser's lazy-load heuristics fetch the next card merely
+  // because a few pixels peek into the horizontal strip. Load it when the
+  // visitor actually scrolls/swipes there (or presses the next button).
+  strip.addEventListener('scroll', loadVisible, { passive: true });
   requestAnimationFrame(update);
 }
 
@@ -327,7 +370,7 @@ function selectPlace(id, origin) {
   if (state.view !== 'map') changeView('map');
   const city = data.cities.find(c => c.id === p.city);
   const sourceLinks = (p.source_urls || []).map(safeLink).filter(Boolean);
-  $('place-detail').innerHTML = `<button class="detail-close" id="close-detail" aria-label="Stäng platsdetaljer">×</button><div class="detail-top">${badge(p)}<div><h2 id="detail-title" tabindex="-1">${esc(p.name)}</h2><p class="detail-meta">${esc(CATEGORIES[p.category].singular)} · ${esc(p.area)}<br>${dayText(p.date)}${p.status === 'Valfritt' ? ' · valfritt alternativ' : p.status === 'Boende' ? ' · ert boende' : ''}</p></div></div>${external(googleMapsUrl(p), icon('map') + 'Öppna Google Maps', 'primary-button')}<p class="detail-footnote">Välj Vägbeskrivning i Google Maps när ni vill ta er hit.</p>${photoGallery(p)}${foodBadges(p)}<p class="detail-description">${esc(p.description_sv)}</p>${recommendation(p)}<p class="detail-address">${esc(p.address)}</p><details class="detail-sources"><summary>Platsnotering och källor</summary><p>${esc(p.location_note || 'Kartpunkten visar platsens ungefärliga läge. Kontrollera rätt entré på plats.')}</p>${sourceLinks.map((u, i) => external(u, 'Källa ' + (i + 1))).join('')}<p>${esc(city.name)} · uppgifter från reseplanen. En markering är inte en bokning.</p></details>`;
+  $('place-detail').innerHTML = `<button class="detail-close" id="close-detail" aria-label="Stäng platsdetaljer">×</button><div class="detail-top">${badge(p)}<div><h2 id="detail-title" tabindex="-1">${esc(p.name)}</h2><p class="detail-meta">${esc(placeType(p))} · ${esc(p.area)}<br>${dayText(p.date)}${p.status === 'Valfritt' ? ' · valfritt alternativ' : p.status === 'Boende' ? ' · ert boende' : ''}</p></div></div>${external(googleMapsUrl(p), icon('map') + 'Öppna Google Maps', 'primary-button')}<p class="detail-footnote">Välj Vägbeskrivning i Google Maps när ni vill ta er hit.</p>${photoGallery(p)}${foodBadges(p)}<p class="detail-description">${esc(p.description_sv)}</p>${recommendation(p)}<p class="detail-address">${esc(p.address)}</p><details class="detail-sources"><summary>Platsnotering och källor</summary><p>${esc(p.location_note || 'Kartpunkten visar platsens ungefärliga läge. Kontrollera rätt entré på plats.')}</p>${sourceLinks.map((u, i) => external(u, 'Källa ' + (i + 1))).join('')}<p>${esc(city.name)} · uppgifter från reseplanen. En markering är inte en bokning.</p></details>`;
   const closeBar = document.createElement('div');
   closeBar.className = 'detail-close-bar';
   const closeButton = $('close-detail');
@@ -430,6 +473,16 @@ async function startMap() {
     const first = matching[0] || places.find(p => p.city === state.city);
     map = new lib.Map({ container: 'map', style: 'https://tiles.openfreemap.org/styles/liberty', center: [first.lon, first.lat], zoom: 11, attributionControl: false, renderWorldCopies: false, localIdeographFontFamily: false,
       locale: { 'NavigationControl.ResetBearing': 'Återställ kartan mot norr', 'NavigationControl.ZoomIn': 'Zooma in', 'NavigationControl.ZoomOut': 'Zooma ut' } });
+    // Keep wheel/trackpad zoom and the release momentum gentle enough for a
+    // travel map. MapLibre's defaults are tuned for a desktop map with more
+    // room; this page also has list and detail overlays around the canvas.
+    map.scrollZoom.setWheelZoomRate(1 / 600);
+    map.scrollZoom.setZoomRate(1 / 150);
+    map.touchZoomRotate.setZoomRate(0.75);
+    map.touchZoomRotate.setZoomThreshold(0.2);
+    map.dragPan.enable({ linearity: 0.12, maxSpeed: 1100, deceleration: 3000 });
+    map.touchZoomRotate.disableRotation();
+    map.touchPitch.disable();
     map.addControl(new lib.AttributionControl({ compact: false }), 'bottom-left');
     map.addControl(new lib.NavigationControl({ showCompass: true, visualizePitch: true }), 'bottom-right');
     const locationControl = new lib.GeolocateControl({ positionOptions: { enableHighAccuracy: false }, trackUserLocation: false, showUserHeading: false });
@@ -452,10 +505,10 @@ function renderMarkers() {
   markers.forEach(m => m.remove()); markers = [];
   for (const p of matching) {
     const button = document.createElement('button');
-    button.className = 'pin' + (isOptionalActivity(p) ? ' optional' : '') + (isLodging(p) ? ' lodging' : '') + (p.label.length > 4 ? ' long-label' : '');
+    button.className = 'pin' + (isOptionalActivity(p) ? ' optional' : '') + (isLodging(p) ? ' lodging' : '') + (isTransport(p) ? ' transport' : '') + (p.label.length > 4 ? ' long-label' : '');
     button.style.setProperty('--cat', CATEGORIES[p.category].color);
-    button.dataset.place = p.id; button.setAttribute('aria-label', (isLodging(p) ? 'Boende' : p.label) + '. ' + p.name); button.setAttribute('aria-pressed', String(state.selected === p.id));
-    button.innerHTML = isLodging(p) ? lodgingMarker : `<span class="pin-shape"><span class="pin-label">${esc(p.label)}</span></span>`;
+    button.dataset.place = p.id; button.setAttribute('aria-label', (isLodging(p) ? 'Boende' : isTransport(p) ? transportLabel(p) : p.label) + '. ' + p.name); button.setAttribute('aria-pressed', String(state.selected === p.id));
+    button.innerHTML = isLodging(p) ? lodgingMarker : isTransport(p) ? transportMarker(p) : `<span class="pin-shape"><span class="pin-label">${esc(p.label)}</span></span>`;
     button.addEventListener('click', event => { event.stopPropagation(); selectPlace(p.id, button); });
     button.addEventListener('dblclick', event => { event.preventDefault(); event.stopPropagation(); });
     // MapLibre also recognizes double taps before the synthesized click.

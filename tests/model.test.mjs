@@ -40,6 +40,18 @@ test('lodging has no number and does not consume activity numbers', () => {
   });
 });
 
+test('transport points have no activity number and do not consume one', () => {
+  const numbered = numberPlaces([
+    place('station', { status: 'Transport', sequence: 0 }),
+    place('walk', { sequence: 1 }),
+    place('bus', { status: 'Transport', sequence: 2 }),
+    place('museum', { sequence: 3 }),
+  ]);
+  assert.deepEqual(Object.fromEntries(numbered.map(p => [p.id, p.label])), {
+    station: '', walk: '8.1', bus: '', museum: '8.2',
+  });
+});
+
 test('date, optional, category and accent-insensitive search combine', () => {
   const places = numberPlaces([place('a', { name: 'Sötsak', category: 'sweet' }), place('b', { date: '' }), place('c', { status: 'Valfritt' }), place('d', { date: '2026-10-09' })]);
   const state = { city: 'tokyo', day: '2026-10-08', categories: ['activity', 'sweet'], optional: false, query: '' };

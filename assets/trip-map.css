@@ -200,3 +200,20 @@
   .pin.lodging .pin-house{width:40px;height:40px}
   .pin.lodging[aria-pressed=true] .pin-house{width:46px;height:46px}
 }
+
+/* Transport points use pictograms instead of activity numbers. */
+.number.transport{background:#2867a9;color:#fff;border-radius:10px;display:grid;place-items:center}
+.transport-icon{width:28px;height:28px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pin.transport{width:50px;height:53px}
+.pin.transport .pin-transit{position:absolute;left:50%;bottom:4px;width:44px;height:44px;transform:translateX(-50%);fill:#2867a9;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 2px 2px #14253b50);overflow:visible}
+.pin.transport .pin-transit path{fill:none}
+.pin.transport .pin-transit circle{fill:#fff;stroke:none}
+.pin.transport[aria-pressed=true] .pin-transit{width:50px;height:50px}
+.map-canvas,.maplibregl-canvas-container{touch-action:none;overscroll-behavior:contain}
+@media(max-width:700px),(max-width:1000px) and (max-height:500px){
+  .number.transport{width:38px;height:38px}
+  .transport-icon{width:22px;height:22px}
+  .pin.transport{width:46px;height:50px}
+  .pin.transport .pin-transit{width:40px;height:40px}
+  .pin.transport[aria-pressed=true] .pin-transit{width:46px;height:46px}
+}
