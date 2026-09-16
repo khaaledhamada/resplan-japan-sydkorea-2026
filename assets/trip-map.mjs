@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.6';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.7';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -488,8 +488,13 @@ async function startMap() {
     const locationControl = new lib.GeolocateControl({ positionOptions: { enableHighAccuracy: false }, trackUserLocation: false, showUserHeading: false });
     locationControl.on('error', () => toast('Din position kunde inte hämtas. Du kan fortfarande välja platser och öppna Google Maps.'));
     map.addControl(locationControl, 'bottom-right');
-    map.on('error', () => mapMessage('Delar av kartunderlaget kunde inte laddas. Platslistan och Google Maps fungerar ändå. Prova att ladda om sidan när du har internet.'));
-    map.on('load', () => { $('map-status').hidden = true; });
+    let mapReady = false;
+    map.on('error', () => {
+      // Individual vector tiles can fail transiently while the canvas is
+      // already usable. Do not cover a working map with the fatal fallback.
+      if (!mapReady) mapMessage('Delar av kartunderlaget kunde inte laddas. Platslistan och Google Maps fungerar ändå. Prova att ladda om sidan när du har internet.');
+    });
+    map.on('load', () => { mapReady = true; $('map-status').hidden = true; });
     const initialTimer = setTimeout(() => { if (!map.isStyleLoaded()) mapMessage('Kartunderlaget laddar långsamt. Du kan använda platslistan och Google Maps under tiden.'); }, 18000);
     map.once('idle', () => { clearTimeout(initialTimer); $('map-status').hidden = true; });
     map.getCanvas().setAttribute('aria-label', 'Interaktiv karta. Platslistan ger samma information utan karta.');
