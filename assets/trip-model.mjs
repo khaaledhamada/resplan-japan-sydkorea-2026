@@ -65,6 +65,7 @@ export function orderedPlaces(places) {
 export function numberPlaces(places) {
   const counters = {};
   return orderedPlaces(places).map(p => {
+    if (p.status === 'Boende') return { ...p, label: '' };
     const prefix = p.category === 'food' ? 'M' : p.category === 'cafe' ? 'K' : p.category === 'sweet' ? 'S' : p.status === 'Valfritt' ? 'V' : '';
     const dated = p.category === 'activity' && p.date;
     const key = p.city + ':' + prefix + (dated ? ':' + p.date : '');
@@ -94,7 +95,7 @@ export function filterPlaces(places, state) {
     state.categories.includes(p.category) && (state.optional || p.category !== 'activity' || p.status !== 'Valfritt') &&
     (p.category !== 'food' || !state.foodType || state.foodType === 'all' || p.food_tags?.includes(state.foodType)) &&
     (p.category !== 'cafe' || !state.cafeType || p.cafe_tags?.includes(state.cafeType)) &&
-    (!query || fold([p.name, p.area, p.address, p.description_sv, p.label, ...(p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)), ...(p.cafe_tags || []).map(tag => CAFE_TYPES[tag])].join(' ')).includes(query)));
+    (!query || fold([p.name, p.area, p.address, p.description_sv, p.recommendation_sv, p.label, ...(p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)), ...(p.cafe_tags || []).map(tag => CAFE_TYPES[tag])].join(' ')).includes(query)));
 }
 
 // Dagsplan is deliberately an activity-only view.  Restaurants, cafés and
@@ -117,7 +118,7 @@ export function daysForCity(data, city) {
 // changes city after the planned Kyoto departure around 14:00 (Japan time).
 const DATE_CITY_OVERRIDES = {
   '2026-10-07': 'tokyo',
-  '2026-10-11': 'fuji',
+  '2026-10-11': 'tokyo',
   '2026-10-12': 'hakone',
   '2026-10-13': 'hakone',
   '2026-10-14': 'kyoto',

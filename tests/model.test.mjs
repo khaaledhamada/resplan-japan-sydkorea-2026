@@ -27,6 +27,19 @@ test('activity numbering starts with the date and restarts per day, city and opt
   assert.equal(filterPlaces(numbered, { ...state, query: '8.2' })[0].id, 'b');
   assert.deepEqual(filterPlaces(numbered, { ...state, day: '2026-10-09', optional: false, query: '' }).map(p => p.label), ['9.1']);
 });
+test('lodging has no number and does not consume activity numbers', () => {
+  const numbered = numberPlaces([
+    place('hotel', { status: 'Boende', sequence: 0 }),
+    place('walk', { sequence: 1 }),
+    place('second-hotel', { status: 'Boende', sequence: 2 }),
+    place('museum', { sequence: 3 }),
+    place('undated-hotel', { status: 'Boende', date: '' }),
+  ]);
+  assert.deepEqual(Object.fromEntries(numbered.map(p => [p.id, p.label])), {
+    hotel: '', walk: '8.1', 'second-hotel': '', museum: '8.2', 'undated-hotel': '',
+  });
+});
+
 test('date, optional, category and accent-insensitive search combine', () => {
   const places = numberPlaces([place('a', { name: 'Sötsak', category: 'sweet' }), place('b', { date: '' }), place('c', { status: 'Valfritt' }), place('d', { date: '2026-10-09' })]);
   const state = { city: 'tokyo', day: '2026-10-08', categories: ['activity', 'sweet'], optional: false, query: '' };
@@ -34,6 +47,12 @@ test('date, optional, category and accent-insensitive search combine', () => {
   assert.deepEqual(filterPlaces(places, { ...state, query: 'sotsak' }).map(p => p.id), ['a']);
   assert.equal(filterPlaces(places, { ...state, categories: [] }).length, 0);
 });
+test('search finds a place by the person who recommended it', () => {
+  const places = numberPlaces([place('sushi', { category: 'food', recommendation_sv: 'Rekommendation av Zozo och Roro.' }), place('walk')]);
+  const state = { city: 'tokyo', categories: ['activity', 'food'], optional: true };
+  for (const query of ['zozo', 'RORO']) assert.deepEqual(filterPlaces(places, { ...state, query }).map(p => p.id), ['sushi']);
+});
+
 test('city map opens all days and includes optional activities, even from an old dated link', () => {
   const data = { ...base, places: [place('a'), place('b', { date: '2026-10-09', status: 'Valfritt' })] };
   for (const query of ['', 'day=2026-10-08&city=tokyo', 'view=map&day=2026-10-08&city=tokyo', 'view=unknown&day=2026-10-08']) {
@@ -56,7 +75,7 @@ test('root URL follows the itinerary city for the travel date, including transfe
     ...base,
     cities: [
       { id: 'seoul', name: 'Seoul', notes: { '2026-10-03': 'Ankomst' } },
-      { id: 'tokyo', name: 'Tokyo', notes: { '2026-10-07': 'Flyg' } },
+      { id: 'tokyo', name: 'Tokyo', notes: { '2026-10-07': 'Flyg', '2026-10-11': 'Öppen dag, valfri utflykt' } },
       { id: 'fuji', name: 'Fuji', notes: { '2026-10-11': 'Utflykt' } },
       { id: 'hakone', name: 'Hakone', notes: { '2026-10-12': 'Ryokan' } },
       { id: 'kyoto', name: 'Kyoto', notes: { '2026-10-14': 'Ankomst', '2026-10-17': 'Avresa' } },
@@ -65,7 +84,8 @@ test('root URL follows the itinerary city for the travel date, including transfe
   };
   assert.equal(cityForDate(data, new Date('2026-10-03T08:00:00Z')).id, 'seoul');
   assert.equal(cityForDate(data, new Date('2026-10-07T09:00:00Z')).id, 'tokyo');
-  assert.equal(cityForDate(data, new Date('2026-10-11T09:00:00Z')).id, 'fuji');
+  assert.equal(cityForDate(data, new Date('2026-10-11T09:00:00Z')).id, 'tokyo');
+  assert.equal(initialSelection(data, new URLSearchParams('city=fuji'), new Date('2026-10-11T09:00:00Z')).city, 'fuji');
   assert.equal(cityForDate(data, new Date('2026-10-12T09:00:00Z')).id, 'hakone');
   assert.equal(cityForDate(data, new Date('2026-10-17T03:00:00Z')).id, 'kyoto');
   assert.equal(cityForDate(data, new Date('2026-10-17T06:00:00Z')).id, 'osaka');

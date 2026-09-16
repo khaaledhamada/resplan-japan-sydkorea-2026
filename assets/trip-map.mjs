@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.1';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.2';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -18,9 +18,9 @@ const catStyle = p => `--cat:${CATEGORIES[p.category].color}`;
 const isOptionalActivity = p => p.category === 'activity' && p.status === 'Valfritt';
 const isLodging = p => p.status === 'Boende';
 const lodgingIcon = '<svg class="lodging-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 10 12 2l10 8v11H2Z"/><path d="M9 21v-7h6v7Z"/></svg>';
-const lodgingMarker = label => `<svg class="pin-house" viewBox="0 0 44 44" aria-hidden="true"><path class="pin-house-fill" d="M3 18 22 3l19 15v23H3Z"/><path class="pin-house-door" d="M17 41V27h10v14Z"/><text x="22" y="23" text-anchor="middle">${esc(label)}</text></svg>`;
+const lodgingMarker = '<svg class="pin-house" viewBox="0 0 44 44" aria-hidden="true"><path class="pin-house-fill" d="M3 18 22 3l19 15v23H3Z"/><path class="pin-house-door" d="M17 41V27h10v14Z"/></svg>';
 const badge = p => isLodging(p)
-  ? `<span class="number lodging" title="Boende" style="${catStyle(p)}">${lodgingIcon}<span class="lodging-label">${esc(p.label)}</span></span>`
+  ? `<span class="number lodging" title="Boende" aria-label="Boende" style="${catStyle(p)}">${lodgingIcon}</span>`
   : `<span class="number${isOptionalActivity(p) ? ' optional' : ''}${p.label.length > 4 ? ' long-number' : ''}" style="${catStyle(p)}">${esc(p.label)}</span>`;
 const external = (url, label, cls = '') => `<a class="${cls}" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 const bytes = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
@@ -30,6 +30,7 @@ const mobile = () => matchMedia('(max-width: 700px), (max-width: 1000px) and (ma
 const preferencesKey = 'resplan-map-preferences-v1';
 let savedPreferences = {}, preferencesAvailable = true, lastSavedPreferences = '';
 let data, state, map, markers = [], places = [], matching = [], toastTimer, detailOrigin, loadedDetails = false, mapStarting = false;
+let cameraCity = null;
 
 function readSavedPreferences() {
   try { return parsePreferences(localStorage.getItem(preferencesKey)); }
@@ -108,7 +109,7 @@ function layout() {
   new ResizeObserver(() => $('app').style.setProperty('--controls-height', document.querySelector('.controls').offsetHeight + 'px')).observe(document.querySelector('.controls'));
   $('city').addEventListener('change', () => {
     state = initialSelection(data, new URLSearchParams({ city: $('city').value, view: state.view }), new Date(), savedPreferences);
-    $('search').value = ''; updateDays(); refresh();
+    $('search').value = ''; updateDays(); refresh(true, true);
   });
   $('food-type').addEventListener('change', () => {
     state.foodType = $('food-type').value;
@@ -124,13 +125,25 @@ function layout() {
   $('search').addEventListener('input', () => { state.query = $('search').value; refresh(); });
   $('clear-search').addEventListener('click', () => { state.query = ''; $('search').value = ''; refresh(); $('search').focus(); });
   $('optional').addEventListener('change', () => { state.optional = $('optional').checked; refresh(); });
-  document.querySelectorAll('[data-category]').forEach(input => input.addEventListener('change', () => {
-    const category = input.dataset.category;
-    state.categories = input.checked ? [...new Set([...state.categories, category])] : state.categories.filter(c => c !== category);
-    refresh();
-  }));
+  const categoryClicks = [];
+  document.querySelectorAll('[data-category]').forEach(input => {
+    // Listen on the input so label activation is counted once, not twice.
+    input.addEventListener('click', () => {
+      categoryClicks.push(input.dataset.category);
+      if (categoryClicks.length > 2) categoryClicks.shift();
+    });
+    input.addEventListener('change', () => {
+      const category = input.dataset.category;
+      state.categories = input.checked ? [...new Set([...state.categories, category])] : state.categories.filter(c => c !== category);
+      refresh();
+    });
+  });
   document.querySelectorAll('[data-category-option]').forEach(option => option.addEventListener('dblclick', event => {
     event.preventDefault();
+    // Browsers may continue the click count after moving to another label.
+    // Restoring all filters requires both activations on this same category.
+    if (categoryClicks.length !== 2 || !categoryClicks.every(category => category === option.dataset.categoryOption)) return;
+    categoryClicks.length = 0;
     // A double tap is a quick, discoverable "show everything" action. Clear
     // the food/café subfilters too, otherwise the category boxes would all be
     // checked while a hidden type filter still narrowed the map.
@@ -155,22 +168,20 @@ function layout() {
     const expanded = $('app').classList.toggle('sheet-open');
     $('sheet-toggle').setAttribute('aria-expanded', String(expanded));
     $('sheet-toggle').textContent = expanded ? 'Visa karta ↓' : 'Visa lista ↑';
-    if (!expanded) fitMap();
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') { closeFilters(); closeDetail(true); } });
   window.addEventListener('resize', () => requestAnimationFrame(() => {
     map?.resize();
-    const selected = places.find(p => p.id === state.selected);
-    if (selected) focusPlace(selected, false); else fitMap();
   }));
   window.addEventListener('popstate', () => {
     const restored = initialSelection(data, new URLSearchParams(location.search), new Date(), readSavedPreferences());
+    const cityChanged = restored.city !== state.city;
     closeDetail(false, false);
     $('app').classList.remove('sheet-open');
     $('sheet-toggle').textContent = 'Visa lista ↑'; $('sheet-toggle').setAttribute('aria-expanded', 'false');
     state = restored;
     $('city').value = state.city; $('search').value = state.query; $('optional').checked = state.optional;
-    updateDays(); refresh(false); changeView(state.view, false);
+    updateDays(); refresh(false, cityChanged); changeView(state.view, false);
     if (state.selected && matching.some(p => p.id === state.selected)) selectPlace(state.selected);
     else closeDetail();
   });
@@ -209,7 +220,7 @@ function updateUrl() {
   savePreferences();
 }
 
-function refresh(clear = true) {
+function refresh(clear = true, refit = false) {
   if (clear) closeDetail();
   if (state.view === 'map') state.day = '';
   $('optional').checked = state.optional;
@@ -226,7 +237,7 @@ function refresh(clear = true) {
   $('place-list').innerHTML = matching.length ? groupMapPlaces(matching).map(group => `<section class="map-place-group" data-group="${group.id}" aria-labelledby="group-${group.id}"><h3 id="group-${group.id}">${group.title}</h3>${group.places.map(p => `<button class="place-row" data-place="${esc(p.id)}" aria-pressed="${state.selected === p.id}">${badge(p)}<span class="row-text"><span class="row-title">${esc(p.name)}</span><span class="row-meta">${esc(p.area)}${p.category === 'food' ? ' · ' + esc((p.food_tags || []).map(tag => foodTypeLabel(tag, p.city)).join(' / ')) : p.category === 'cafe' ? ' · ' + esc((p.cafe_tags || []).map(tag => CAFE_TYPES[tag]).join(' / ')) : ''} · ${esc(p.status === 'Valfritt' ? 'Valfritt' : CATEGORIES[p.category].singular)}</span></span><span class="row-chevron" aria-hidden="true">›</span></button>`).join('')}</section>`).join('') : '<div class="empty-state">Inga platser matchar ditt val.<br>Prova en annan sökning eller kategori.<br><button class="text-button" id="reset-filters">Visa alla platser i staden</button></div>';
   $('place-list').querySelectorAll('[data-place]').forEach(b => b.addEventListener('click', () => selectPlace(b.dataset.place, b)));
   $('reset-filters')?.addEventListener('click', () => { state.day = ''; state.query = ''; state.foodType = ''; state.cafeType = ''; state.categories = Object.keys(CATEGORIES); state.optional = true; $('search').value = ''; $('optional').checked = true; updateDays(); refresh(); });
-  renderPlan(); renderMarkers(); fitMap(); updateUrl();
+  renderPlan(); renderMarkers(); if (refit) fitMap(); updateUrl();
 }
 
 function changeView(view, update = true) {
@@ -243,7 +254,7 @@ function changeView(view, update = true) {
   if (view === 'map') {
     state.day = ''; updateDays();
     if (previous !== view) refresh(false);
-    requestAnimationFrame(() => { map?.resize(); fitMap(); }); startMap();
+    requestAnimationFrame(() => { map?.resize(); if (cameraCity !== state.city) fitMap(); }); startMap();
   }
   if (view === 'details') showDetails();
   if (update) updateUrl();
@@ -310,21 +321,27 @@ function bindPhotos() {
 
 function selectPlace(id, origin) {
   const p = places.find(p => p.id === id); if (!p) return;
+  map?.stop();
   closeFilters();
   detailOrigin = origin || document.activeElement; state.selected = id;
   if (state.view !== 'map') changeView('map');
   const city = data.cities.find(c => c.id === p.city);
   const sourceLinks = (p.source_urls || []).map(safeLink).filter(Boolean);
   $('place-detail').innerHTML = `<button class="detail-close" id="close-detail" aria-label="Stäng platsdetaljer">×</button><div class="detail-top">${badge(p)}<div><h2 id="detail-title" tabindex="-1">${esc(p.name)}</h2><p class="detail-meta">${esc(CATEGORIES[p.category].singular)} · ${esc(p.area)}<br>${dayText(p.date)}${p.status === 'Valfritt' ? ' · valfritt alternativ' : p.status === 'Boende' ? ' · ert boende' : ''}</p></div></div>${external(googleMapsUrl(p), icon('map') + 'Öppna Google Maps', 'primary-button')}<p class="detail-footnote">Välj Vägbeskrivning i Google Maps när ni vill ta er hit.</p>${photoGallery(p)}${foodBadges(p)}<p class="detail-description">${esc(p.description_sv)}</p>${recommendation(p)}<p class="detail-address">${esc(p.address)}</p><details class="detail-sources"><summary>Platsnotering och källor</summary><p>${esc(p.location_note || 'Kartpunkten visar platsens ungefärliga läge. Kontrollera rätt entré på plats.')}</p>${sourceLinks.map((u, i) => external(u, 'Källa ' + (i + 1))).join('')}<p>${esc(city.name)} · uppgifter från reseplanen. En markering är inte en bokning.</p></details>`;
+  const closeBar = document.createElement('div');
+  closeBar.className = 'detail-close-bar';
+  const closeButton = $('close-detail');
+  closeButton.before(closeBar); closeBar.append(closeButton);
   bindPhotos();
   $('place-detail').hidden = false; $('app').classList.add('has-selection'); $('app').classList.remove('sheet-open');
   $('sheet-toggle').textContent = 'Visa lista ↑'; $('sheet-toggle').setAttribute('aria-expanded', 'false');
   $('close-detail').addEventListener('click', () => closeDetail(true));
   document.querySelectorAll('[data-place]').forEach(e => e.setAttribute('aria-pressed', String(e.dataset.place === id)));
   requestAnimationFrame(() => {
-    // Keep the current zoom when opening a marker; only pan enough to keep
-    // the detail card and the selected pin visible.
-    focusPlace(p, false);
+    if (state.selected !== id || $('place-detail').hidden) return;
+    // A marker click leaves the camera exactly where the visitor put it.
+    // List/day-plan selections may reveal an off-screen place at the same zoom.
+    if (!origin?.classList.contains('pin')) focusPlace(p);
     $('detail-title').focus({ preventScroll: true });
   });
   updateUrl();
@@ -338,12 +355,7 @@ function closeDetail(restore = false, update = true) {
     const origin = detailOrigin?.isConnected && detailOrigin.getClientRects().length ? detailOrigin : mobile() ? $('sheet-toggle') : $('fit-map');
     origin.focus({ preventScroll: true });
   }
-  if (restore && map) {
-    // Remove the detail-card padding without fitting bounds. Closing a card
-    // should leave the map exactly at the user's zoom level and area.
-    map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 });
-    map.resize();
-  }
+  if (restore) map?.stop();
   if (update) updateUrl();
 }
 
@@ -442,9 +454,12 @@ function renderMarkers() {
     const button = document.createElement('button');
     button.className = 'pin' + (isOptionalActivity(p) ? ' optional' : '') + (isLodging(p) ? ' lodging' : '') + (p.label.length > 4 ? ' long-label' : '');
     button.style.setProperty('--cat', CATEGORIES[p.category].color);
-    button.dataset.place = p.id; button.setAttribute('aria-label', p.label + '. ' + p.name); button.setAttribute('aria-pressed', String(state.selected === p.id));
-    button.innerHTML = isLodging(p) ? lodgingMarker(p.label) : `<span class="pin-shape"><span class="pin-label">${esc(p.label)}</span></span>`;
+    button.dataset.place = p.id; button.setAttribute('aria-label', (isLodging(p) ? 'Boende' : p.label) + '. ' + p.name); button.setAttribute('aria-pressed', String(state.selected === p.id));
+    button.innerHTML = isLodging(p) ? lodgingMarker : `<span class="pin-shape"><span class="pin-label">${esc(p.label)}</span></span>`;
     button.addEventListener('click', event => { event.stopPropagation(); selectPlace(p.id, button); });
+    button.addEventListener('dblclick', event => { event.preventDefault(); event.stopPropagation(); });
+    // MapLibre also recognizes double taps before the synthesized click.
+    for (const type of ['touchstart', 'touchend']) button.addEventListener(type, event => event.stopPropagation(), { passive: true });
     markers.push(new window.maplibregl.Marker({ element: button, anchor: 'bottom' }).setLngLat([p.lon, p.lat]).addTo(map));
   }
 }
@@ -465,23 +480,24 @@ function cameraPadding(detail = false) {
   return { top: top * scale, bottom: bottom * scale, left: 35, right: 55 };
 }
 
-function focusPlace(p, zoom = true) {
+function focusPlace(p) {
   if (!map || state.view !== 'map') return;
-  map.easeTo({ center: [p.lon, p.lat], zoom: zoom ? Math.max(map.getZoom(), 13) : map.getZoom(),
-    padding: cameraPadding(true), duration: reduced() || !zoom ? 0 : 350 });
+  const padding = cameraPadding(true);
+  map.easeTo({ center: [p.lon, p.lat], zoom: map.getZoom(),
+    offset: [(padding.left - padding.right) / 2, (padding.top - padding.bottom) / 2], duration: 0 });
 }
 
 function fitMap() {
   if (!map || state.view !== 'map') return;
   map.resize();
   if ($('map').clientWidth < 160 || $('map').clientHeight < 160) return;
-  // Detail panels set camera padding. Reset it before fitting, especially after
-  // rotating a phone or changing between desktop and mobile layout.
+  // Only explicit overview/city changes fit the camera to the visible places.
   map.setPadding({ top: 0, right: 0, bottom: 0, left: 0 });
   const points = matching.length ? matching : places.filter(p => p.city === state.city);
   if (!points.length) return;
   const bounds = new window.maplibregl.LngLatBounds(); points.forEach(p => bounds.extend([p.lon, p.lat]));
   map.fitBounds(bounds, { padding: cameraPadding(), maxZoom: 14, duration: reduced() ? 0 : 300 });
+  cameraCity = state.city;
 }
 
 async function boot() {
