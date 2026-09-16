@@ -7,8 +7,13 @@ export const CATEGORIES = {
 };
 
 export const CAFE_TYPES = { matcha: 'Matcha', tea: 'Te', coffee: 'Kaffe', bakery: 'Bagerikafé' };
+// Fuji/Kawaguchiko is an optional 11 October excursion from Tokyo. Keep its
+// original city IDs so existing place links and encrypted data remain valid.
+export function placeInCity(place, city) {
+  return place.city === city || (city === 'tokyo' && place.city === 'fuji' && place.date === '2026-10-11');
+}
 export function cafeOptions(places, city) {
-  return Object.entries(CAFE_TYPES).map(([id, label]) => ({id, label, count: places.filter(p => p.city === city && p.category === 'cafe' && p.cafe_tags?.includes(id)).length})).filter(o => o.count);
+  return Object.entries(CAFE_TYPES).map(([id, label]) => ({id, label, count: places.filter(p => placeInCity(p, city) && p.category === 'cafe' && p.cafe_tags?.includes(id)).length})).filter(o => o.count);
 }
 
 export const FOOD_TYPES = {
@@ -27,7 +32,7 @@ export function foodOptions(places, city) {
     ? ['bbq', 'meat', 'soup', 'noodles', 'dumplings', 'bibimbap', 'streetfood', 'seafood']
     : ['sushi', 'ramen', 'meat', 'bbq', 'tonkatsu', 'noodles', 'dumplings', 'seafood', 'streetfood', 'okonomiyaki', 'tofu', 'curry', 'japanese'];
   return [...new Set([...priority, ...Object.keys(FOOD_TYPES)])].map(id => ({
-    id, label: foodTypeLabel(id, city), count: places.filter(p => p.city === city && p.category === 'food' && p.food_tags?.includes(id)).length,
+    id, label: foodTypeLabel(id, city), count: places.filter(p => placeInCity(p, city) && p.category === 'food' && p.food_tags?.includes(id)).length,
   })).filter(option => option.count);
 }
 
@@ -68,7 +73,8 @@ export function numberPlaces(places) {
     if (p.status === 'Boende' || p.status === 'Transport') return { ...p, label: '' };
     const prefix = p.category === 'food' ? 'M' : p.category === 'cafe' ? 'K' : p.category === 'sweet' ? 'S' : p.status === 'Valfritt' ? 'V' : '';
     const dated = p.category === 'activity' && p.date;
-    const key = p.city + ':' + prefix + (dated ? ':' + p.date : '');
+    const counterCity = p.city === 'fuji' && p.date === '2026-10-11' ? 'tokyo' : p.city;
+    const key = counterCity + ':' + prefix + (dated ? ':' + p.date : '');
     counters[key] = (counters[key] || 0) + 1;
     return { ...p, label: (dated ? Number(p.date.slice(-2)) + '.' : '') + prefix + counters[key] };
   });
@@ -91,7 +97,7 @@ export function fold(text) {
 
 export function filterPlaces(places, state) {
   const query = fold(state.query || '');
-  return places.filter(p => p.city === state.city && (!state.day || !p.date || p.date === state.day) &&
+  return places.filter(p => placeInCity(p, state.city) && (!state.day || !p.date || p.date === state.day) &&
     state.categories.includes(p.category) && (state.optional || p.category !== 'activity' || p.status !== 'Valfritt') &&
     (p.category !== 'food' || !state.foodType || state.foodType === 'all' || p.food_tags?.includes(state.foodType)) &&
     (p.category !== 'cafe' || !state.cafeType || p.cafe_tags?.includes(state.cafeType)) &&
@@ -101,14 +107,14 @@ export function filterPlaces(places, state) {
 // Dagsplan is deliberately an activity-only view.  Restaurants, cafés and
 // sweets stay discoverable on Karta, where the category and food filters live.
 export function planPlaces(places, state) {
-  return places.filter(p => p.city === state.city && p.category === 'activity' &&
+  return places.filter(p => placeInCity(p, state.city) && p.category === 'activity' &&
     (!state.day || !p.date || p.date === state.day) &&
     (state.optional || p.status !== 'Valfritt'));
 }
 
 export function daysForCity(data, city) {
   const c = data.cities.find(c => c.id === city);
-  return [...new Set([...data.places.filter(p => p.city === city).map(p => p.date).filter(Boolean), ...Object.keys(c?.notes || {})])].sort();
+  return [...new Set([...data.places.filter(p => placeInCity(p, city)).map(p => p.date).filter(Boolean), ...Object.keys(c?.notes || {})])].sort();
 }
 
 // The itinerary has a few dates where more than one city contains a note
@@ -181,7 +187,9 @@ export function initialSelection(data, params, now = new Date(), preferences = {
   // that happened to be active when the bookmark was created.  A normal city
   // query remains an explicit manual/shared-link choice.
   const autoCityParam = params.get('autocity') === '1';
-  const explicitCity = linkedPlace?.city || (!autoCityParam && params.get('city'));
+  const linkedCity = linkedPlace?.city === 'fuji' ? 'tokyo' : linkedPlace?.city;
+  const requestedCity = params.get('city') === 'fuji' ? 'tokyo' : params.get('city');
+  const explicitCity = linkedCity || (!autoCityParam && requestedCity);
   const autoEligible = !linkedPlace && (!params.has('city') || autoCityParam);
   let city = data.cities.find(c => c.id === explicitCity);
   let automaticCity = autoEligible;
@@ -191,7 +199,7 @@ export function initialSelection(data, params, now = new Date(), preferences = {
     const datedCity = cityForDate(data, now);
     if (datedCity) city = datedCity;
   }
-  if (!city) city = data.cities.find(c => c.id === saved.city);
+  if (!city) city = data.cities.find(c => c.id === (saved.city === 'fuji' ? 'tokyo' : saved.city));
   if (!city) {
     const datedCity = cityForDate(data, now);
     if (datedCity) city = datedCity;

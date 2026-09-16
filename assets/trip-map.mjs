@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink } from './trip-model.mjs?v=20260916.11';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity } from './trip-model.mjs?v=20260916.12';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -121,7 +121,7 @@ function layout() {
     </main>
     <div class="toast" id="toast" role="status" hidden></div>
   </div>`;
-  $('city').innerHTML = data.cities.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+  $('city').innerHTML = data.cities.filter(c => c.id !== 'fuji').map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
   $('city').value = state.city;
   updateDays();
   new ResizeObserver(() => $('app').style.setProperty('--controls-height', document.querySelector('.controls').offsetHeight + 'px')).observe(document.querySelector('.controls'));
@@ -212,13 +212,13 @@ function updateDays() {
 }
 
 function updateFoodOptions() {
-  const count = places.filter(p => p.city === state.city && p.category === 'food').length;
+  const count = places.filter(p => placeInCity(p, state.city) && p.category === 'food').length;
   $('food-filter-label').textContent = 'Matfilter · ' + (state.city === 'seoul' ? 'Sydkorea' : 'Japan');
   $('food-type').innerHTML = `<option value="">Alla typer av mat (${count})</option>` + (state.foodType === 'all' ? `<option value="all">Alla typer av mat (${count})</option>` : '') + foodOptions(places, state.city).map(o => `<option value="${o.id}">${esc(o.label)} (${o.count})</option>`).join('');
   $('food-type').value = state.foodType || '';
   $('food-type').disabled = !state.categories.includes('food');
   document.querySelector('.food-filter').classList.toggle('is-active', Boolean(state.foodType));
-  const cafeCount = places.filter(p => p.city === state.city && p.category === 'cafe').length;
+  const cafeCount = places.filter(p => placeInCity(p, state.city) && p.category === 'cafe').length;
   $('cafe-type').innerHTML = `<option value="">Alla kaféer (${cafeCount})</option>` + cafeOptions(places, state.city).map(o => `<option value="${o.id}">${esc(o.label)} (${o.count})</option>`).join('');
   $('cafe-type').value = state.cafeType || '';
   $('cafe-type').disabled = !state.categories.includes('cafe');

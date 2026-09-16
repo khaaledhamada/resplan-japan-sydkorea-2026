@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { numberPlaces, groupMapPlaces, filterPlaces, planPlaces, initialSelection, cityForDate, parsePreferences, selectionPreferences, cafeOptions, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink } from '../assets/trip-model.mjs';
+import { numberPlaces, groupMapPlaces, filterPlaces, planPlaces, initialSelection, cityForDate, parsePreferences, selectionPreferences, cafeOptions, foodOptions, foodTypeLabel, googleMapsUrl, validateData, safeLink, placeInCity, daysForCity } from '../assets/trip-model.mjs';
 import { encryptText, decryptText } from '../scripts/crypto.mjs';
 import { randomBytes } from 'node:crypto';
 const place = (id, extra = {}) => ({ id, city: 'tokyo', name: 'Plats ' + id, category: 'activity', date: '2026-10-08', sequence: 1, lat: 35.6, lon: 139.7, description_sv: 'Promenad', address: 'Tokyo, Japan', status: 'Planerat', ...extra });
@@ -97,7 +97,7 @@ test('root URL follows the itinerary city for the travel date, including transfe
   assert.equal(cityForDate(data, new Date('2026-10-03T08:00:00Z')).id, 'seoul');
   assert.equal(cityForDate(data, new Date('2026-10-07T09:00:00Z')).id, 'tokyo');
   assert.equal(cityForDate(data, new Date('2026-10-11T09:00:00Z')).id, 'tokyo');
-  assert.equal(initialSelection(data, new URLSearchParams('city=fuji'), new Date('2026-10-11T09:00:00Z')).city, 'fuji');
+  assert.equal(initialSelection(data, new URLSearchParams('city=fuji'), new Date('2026-10-11T09:00:00Z')).city, 'tokyo');
   assert.equal(cityForDate(data, new Date('2026-10-12T09:00:00Z')).id, 'hakone');
   assert.equal(cityForDate(data, new Date('2026-10-17T03:00:00Z')).id, 'kyoto');
   assert.equal(cityForDate(data, new Date('2026-10-17T06:00:00Z')).id, 'osaka');
@@ -112,6 +112,25 @@ test('root URL follows the itinerary city for the travel date, including transfe
   const explicit = initialSelection(data, new URLSearchParams('city=seoul'), new Date('2026-10-12T09:00:00Z'));
   assert.equal(explicit.city, 'seoul');
   assert.equal(explicit.autoCity, false);
+});
+
+test('Fuji and Kawaguchiko are visible as Tokyo alternatives on October 11', () => {
+  const data = {
+    ...base,
+    cities: [...base.cities, { id: 'fuji', name: 'Fuji och Kawaguchiko', notes: { '2026-10-11': 'Utflykt' } }],
+    places: [
+      place('tokyo-walk', { date: '2026-10-11' }),
+      place('fuji-option', { city: 'fuji', date: '2026-10-11', status: 'Valfritt', name: 'Fuji-alternativ' }),
+      place('fuji-restaurant', { city: 'fuji', date: '2026-10-11', status: 'Valfritt', category: 'food', food_tags: ['ramen'], name: 'Fuji-mat' }),
+    ],
+  };
+  assert.equal(placeInCity(data.places[1], 'tokyo'), true);
+  assert.equal(placeInCity(data.places[1], 'kyoto'), false);
+  assert.deepEqual(daysForCity(data, 'tokyo'), ['2026-10-11', '2026-10-12']);
+  const state = initialSelection(data, new URLSearchParams('city=tokyo&view=map&day=2026-10-11'));
+  assert.equal(state.city, 'tokyo');
+  assert.deepEqual(filterPlaces(numberPlaces(data.places), state).map(p => p.id), ['fuji-option', 'tokyo-walk', 'fuji-restaurant']);
+  assert.equal(initialSelection(data, new URLSearchParams('city=fuji')).city, 'tokyo');
 });
 test('Dagsplan contains activities only; food stays on Karta', () => {
   const places = numberPlaces([
