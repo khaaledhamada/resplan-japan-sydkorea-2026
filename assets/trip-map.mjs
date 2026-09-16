@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.14';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.15';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -48,7 +48,7 @@ const assetUrl = path => new URL(path, import.meta.url).href;
 const mobile = () => matchMedia('(max-width: 700px), (max-width: 1000px) and (max-height: 500px)').matches;
 const preferencesKey = 'resplan-map-preferences-v1';
 let savedPreferences = {}, preferencesAvailable = true, lastSavedPreferences = '';
-let data, state, map, markers = [], places = [], matching = [], toastTimer, detailOrigin, loadedDetails = false, mapStarting = false;
+let data, state, map, markers = [], places = [], matching = [], toastTimer, detailOrigin, detailReturnToList = false, loadedDetails = false, mapStarting = false;
 let cameraCity = null;
 
 function readSavedPreferences() {
@@ -363,6 +363,7 @@ function bindPhotos() {
 function selectPlace(id, origin) {
   const p = places.find(p => p.id === id); if (!p) return;
   map?.stop();
+  detailReturnToList = Boolean(mobile() && origin?.classList.contains('place-row') && $('app').classList.contains('sheet-open'));
   closeFilters();
   detailOrigin = origin || document.activeElement; state.selected = id;
   if (state.view !== 'map') changeView('map');
@@ -390,7 +391,14 @@ function selectPlace(id, origin) {
 
 function closeDetail(restore = false, update = true) {
   if (!$('place-detail')) return;
+  const returnToList = restore && detailReturnToList;
+  detailReturnToList = false;
   state.selected = null; $('place-detail').hidden = true; $('app').classList.remove('has-selection');
+  if (returnToList) {
+    $('app').classList.add('sheet-open');
+    $('sheet-toggle').textContent = 'Visa karta ↓';
+    $('sheet-toggle').setAttribute('aria-expanded', 'true');
+  }
   document.querySelectorAll('[data-place][aria-pressed=true]').forEach(e => e.setAttribute('aria-pressed', 'false'));
   if (restore) {
     const origin = detailOrigin?.isConnected && detailOrigin.getClientRects().length ? detailOrigin : mobile() ? $('sheet-toggle') : $('fit-map');
