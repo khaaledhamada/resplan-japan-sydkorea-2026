@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.17';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.18';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -340,6 +340,7 @@ function bindPhotos() {
     const figures = visible(), target = figures[Math.max(0, Math.min(figures.length - 1, currentIndex() + direction))];
     if (target) {
       loadImage(target.querySelector('img'));
+      loadImage(target.nextElementSibling?.querySelector('img'));
       strip.scrollBy({ left: target.getBoundingClientRect().left - strip.getBoundingClientRect().left, behavior: reduced() ? 'instant' : 'smooth' });
     }
   };
@@ -366,7 +367,11 @@ function bindPhotos() {
   // because a few pixels peek into the horizontal strip. Load it when the
   // visitor actually scrolls/swipes there (or presses the next button).
   strip.addEventListener('scroll', loadVisible, { passive: true });
-  requestAnimationFrame(update);
+  requestAnimationFrame(() => {
+    update();
+    // Warm one adjacent image while the visitor reads the first one.
+    loadImage(deferred[0]);
+  });
 }
 
 function selectPlace(id, origin) {
