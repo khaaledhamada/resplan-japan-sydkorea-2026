@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.13';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.14';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -92,11 +92,12 @@ function layout() {
       <div class="controls">
         <div class="search-row"><label class="search-field">${icon('search')}<input id="search" type="search" placeholder="Sök bland resans platser" aria-label="Sök platser i vald stad" autocomplete="off"><button class="search-clear" id="clear-search" aria-label="Rensa sökning" hidden>×</button></label><button class="mobile-lock" data-lock aria-label="Lås sidan">${icon('lock')}</button></div>
         <header class="identity"><div><h1>Resekartan</h1><p>${esc(config.subtitle)}</p></div></header>
-        <div class="selects"><label class="select-box"><span>Stad</span><select id="city" aria-label="Stad"></select></label><label class="select-box day-filter"><span>Dag</span><select id="day" aria-label="Dag"></select></label></div>
+        <div class="selects"><label class="select-box"><span>Stad</span><select id="city" aria-label="Stad"></select></label></div>
         <div class="filter-panel" id="filter-panel">
           <button class="filters-toggle" id="filters-toggle" aria-expanded="false" aria-controls="filter-options">${icon('list')}<span id="filters-summary">Filter</span><span aria-hidden="true">⌄</span></button>
           <div class="filter-options" id="filter-options">
             <fieldset class="category-filters"><legend>Visa på kartan</legend><p class="filter-hint">Bocka i det ni vill se · dubbeltryck på en kategori för alla</p><div class="category-options">${Object.entries(CATEGORIES).map(([key, c]) => `<label class="category-option" data-category-option="${key}"><input type="checkbox" data-category="${key}" checked><span>${c.name}</span></label>`).join('')}</div></fieldset>
+            <label class="food-filter day-filter"><span>Dagfilter</span><select id="day" aria-label="Dag"></select></label>
             <label class="food-filter"><span id="food-filter-label">Matfilter</span><select id="food-type" aria-labelledby="food-filter-label"></select></label>
             <label class="food-filter cafe-filter"><span id="cafe-filter-label">Kaféfilter</span><select id="cafe-type" aria-labelledby="cafe-filter-label"></select></label>
             <p class="preferences-note" id="preferences-note">Dina val sparas i den här webbläsaren.</p>

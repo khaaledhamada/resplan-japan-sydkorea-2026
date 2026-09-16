@@ -17,7 +17,7 @@
 .search-row{display:flex;align-items:center;gap:8px}
 .search-row .search-field{flex:1;min-width:0}
 .app[data-view=map] .optional-toggle{display:none}
-.app[data-view=map] .selects{grid-template-columns:1fr 1fr}
+.app[data-view=map] .selects{grid-template-columns:1fr}
 .app[data-view=map] .chips{margin-bottom:18px}
 .map-place-group h3{font-size:12px;line-height:1.5;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:20px 0 10px;font-weight:700}
 .map-place-group:first-child h3{margin-top:12px}
