@@ -1,4 +1,4 @@
-import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.15';
+import { CATEGORIES, CAFE_TYPES, cafeOptions, foodOptions, foodTypeLabel, validateData, numberPlaces, groupMapPlaces, filterPlaces, planPlaces, daysForCity, dayText, initialSelection, parsePreferences, selectionPreferences, googleMapsUrl, safeLink, placeInCity, isExcursionAlternative } from './trip-model.mjs?v=20260916.17';
 
 const config = JSON.parse(document.getElementById('trip-config').textContent);
 const $ = id => document.getElementById(id);
@@ -159,14 +159,22 @@ function layout() {
   });
   document.querySelectorAll('[data-category-option]').forEach(option => option.addEventListener('dblclick', event => {
     event.preventDefault();
+    // A category double-click also means "all days". Do this before the
+    // same-category guard so the day reset is reliable even when a browser
+    // reports the two clicks differently for a label or checkbox.
+    state.day = '';
+    updateDays();
     // Browsers may continue the click count after moving to another label.
     // Restoring all filters requires both activations on this same category.
-    if (categoryClicks.length !== 2 || !categoryClicks.every(category => category === option.dataset.categoryOption)) return;
+    if (categoryClicks.length !== 2 || !categoryClicks.every(category => category === option.dataset.categoryOption)) {
+      categoryClicks.length = 0;
+      refresh();
+      return;
+    }
     categoryClicks.length = 0;
     // A double tap is a quick, discoverable "show everything" action. Clear
     // the food/café subfilters too, otherwise the category boxes would all be
     // checked while a hidden type filter still narrowed the map.
-    state.day = '';
     state.categories = Object.keys(CATEGORIES);
     state.foodType = ''; state.cafeType = ''; state.optional = true;
     updateDays(); refresh();
